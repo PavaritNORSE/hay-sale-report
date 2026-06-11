@@ -1,64 +1,65 @@
-# HAY Sale Report — daily automated run
+# HAY Sale Report — fully-cloud daily run (v3.13)
 #
-# IMPORTANT: This workflow CANNOT run on GitHub-hosted runners (windows-latest)
-# because the pipeline exports PDFs via Microsoft Excel COM (win32com), and
-# GitHub-hosted runners do not have Excel installed.
+# Runs on GitHub-hosted ubuntu-latest — no laptop needed. PDF export uses
+# LibreOffice headless (pdf_libre.py) instead of Excel COM.
 #
-# It requires a SELF-HOSTED Windows runner with:
-#   - Microsoft Excel installed + licensed
-#   - Python 3.9+ on PATH
-#   - The runner started INTERACTIVELY (run.cmd in a logged-in session),
-#     NOT as a Windows service — Excel COM does not work reliably in
-#     non-interactive Session 0.
-# Setup steps: see GITHUB_SETUP.md
+# NOTE: do NOT add actions/setup-python here — pdf_libre.py needs the
+# SYSTEM python3 (the one python3-uno installs into).
+#
+# Required repository secret:
+#   ENV_FILE = full contents of the local .env file
 name: Daily Sale Report
 
 on:
   schedule:
-    # 06:00 Asia/Bangkok = 23:00 UTC the previous day
+    # 06:00 Asia/Bangkok = 23:00 UTC the previous day.
+    # GitHub may delay scheduled runs by up to ~15-30 min at busy times.
     - cron: '0 23 * * *'
   workflow_dispatch:
     inputs:
       date:
-        description: 'Report date YYYY-MM-DD (leave blank = yesterday)'
+        description: 'Report date YYYY-MM-DD (leave blank = yesterday, Bangkok time)'
         required: false
         default: ''
 
+# Never run two reports at the same time (e.g. manual + scheduled overlap)
+concurrency:
+  group: daily-report
+  cancel-in-progress: false
+
 jobs:
   report:
-    runs-on: [self-hosted, Windows]
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install LibreOffice, Thai fonts, Python deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libreoffice-calc python3-uno \
+            fonts-tlwg-loma fonts-tlwg-garuda fonts-tlwg-kinnari \
+            fonts-crosextra-carlito fonts-crosextra-caladea fonts-liberation \
+            python3-requests python3-dotenv
+
       # .env is gitignored — recreate it from the ENV_FILE repository secret
-      # (Settings > Secrets and variables > Actions > New repository secret,
-      #  name ENV_FILE, value = full contents of your local .env)
+      # (Settings > Secrets and variables > Actions > New repository secret)
       - name: Write .env from secret
-        shell: powershell
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
-        run: Set-Content -Path .env -Value $env:ENV_FILE -Encoding utf8
-
-      - name: Install Python dependencies
-        shell: powershell
-        run: python -m pip install --quiet pywin32 requests python-dotenv
-
-      - name: Kill stale Excel processes
-        shell: powershell
-        run: try { Stop-Process -Name EXCEL -Force -ErrorAction Stop } catch {}
+        run: printf '%s\n' "$ENV_FILE" > .env
 
       - name: Run pipeline
-        shell: powershell
         env:
-          PYTHONIOENCODING: utf-8
           PYTHONUTF8: '1'
+          PYTHONIOENCODING: utf-8
         run: |
-          if ('${{ inputs.date }}' -ne '') {
-            python daily_report.py --fetch-odoo --date '${{ inputs.date }}'
-          } else {
-            python daily_report.py --fetch-odoo
-          }
+          if [ -n "${{ inputs.date }}" ]; then
+            python3 daily_report.py --fetch-odoo --date "${{ inputs.date }}"
+          else
+            python3 daily_report.py --fetch-odoo
+          fi
 
       - name: Upload PDFs as artifact
         if: always()

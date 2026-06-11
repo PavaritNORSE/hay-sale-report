@@ -1971,6 +1971,55 @@ _RE_BRANCH_UNSAFE = re.compile(r'[\\/*?:"<>|]')
 _XL_CALC_MANUAL    = -4135
 _XL_CALC_AUTOMATIC = -4105
 
+def _libreoffice_python():
+    """v3.13: find a Python interpreter that can import the UNO bridge.
+    Linux runner: system python3 with python3-uno installed (= current
+    interpreter). Windows: LibreOffice's bundled python.exe."""
+    try:
+        import uno  # noqa: F401
+        return sys.executable
+    except ImportError:
+        pass
+    for p in (r'C:\Program Files\LibreOffice\program\python.exe',
+              r'C:\Program Files (x86)\LibreOffice\program\python.exe'):
+        if os.path.exists(p):
+            return p
+    return None
+
+def _generate_daily_pdfs_libreoffice(xlsm_path, report_date=None):
+    """v3.13: Excel-free PDF generation via pdf_libre.py (LibreOffice
+    headless). Same return contract as generate_daily_pdfs: list of
+    (branch, pdf_path) tuples — missing branches are reported by main()
+    in the email exactly as with the Excel path."""
+    import subprocess
+    today    = report_date or datetime.now(TZ_BKK)
+    date_str = today.strftime('%d-%b-%Y')
+    pdf_dir  = os.path.join(SCRIPT_DIR, 'Daily PDFs',
+                            today.strftime('%Y'),
+                            today.strftime('%b'),
+                            today.strftime('%d'))
+    py = _libreoffice_python()
+    if py is None:
+        print("\n[PDF] neither pywin32 nor LibreOffice (UNO) available - skipping PDFs")
+        return []
+    cmd = [py, os.path.join(SCRIPT_DIR, 'pdf_libre.py'),
+           '--xlsm', os.path.abspath(xlsm_path),
+           '--date', today.strftime('%Y-%m-%d'),
+           '--outdir', pdf_dir]
+    print(f"\n[PDF] using LibreOffice headless ({py})")
+    r = subprocess.run(cmd)
+    if r.returncode != 0:
+        print(f"[PDF] LibreOffice generator exited with code {r.returncode}")
+    # Collect whatever was produced (partial output still gets emailed,
+    # with the missing branches noted — same as the Excel path).
+    generated = []
+    for branch in DAILY_BRANCHES:
+        branch_safe = _RE_BRANCH_UNSAFE.sub('-', branch).replace(' ', '_')
+        p = os.path.join(pdf_dir, f'{branch_safe}_{date_str}.pdf')
+        if os.path.exists(p):
+            generated.append((branch, p))
+    return generated
+
 def _wait_excel_ready(xl, timeout=60):
     """Poll xl.Ready until it reports True or the timeout elapses.
 
@@ -1998,8 +2047,11 @@ def generate_daily_pdfs(xlsm_path, report_date=None):
     try:
         import win32com.client
     except ImportError:
-        print("\n[PDF] ไม่พบ pywin32 (pip install pywin32)")
-        return
+        # v3.13: no Excel/pywin32 (e.g. GitHub-hosted Linux runner) —
+        # generate the PDFs with LibreOffice headless instead.
+        # (ASCII-only print: this path can run on consoles without UTF-8.)
+        print("\n[PDF] pywin32 not found - falling back to LibreOffice headless")
+        return _generate_daily_pdfs_libreoffice(xlsm_path, report_date)
 
     today    = report_date or datetime.now(TZ_BKK)
     date_str = today.strftime('%d-%b-%Y')

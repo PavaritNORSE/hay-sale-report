@@ -494,6 +494,20 @@ Task Scheduler UI → Right-click "Sale Report - Daily 6 AM" → Run
 - Logs saved per-run to `_Archive\scheduled_logs\YYYY-MM-DD_HHMMSS.log`
 - Manual run via `run_fetch_odoo.bat` unchanged (still has date picker)
 
+### v3.13 — GitHub Actions cloud run + LibreOffice PDF (Jun 11)
+- Odoo credentials ย้ายจาก hardcode ใน daily_report.py → `.env` (ODOO_URL/DB/UID/PW)
+- New `pdf_libre.py` — PDF generator ผ่าน LibreOffice headless (UNO API) สำหรับเครื่องที่ไม่มี Excel
+  - detail table (I6:V6 dynamic-array FILTER) ใช้วิธี inject ค่าจาก YTD ตรง ๆ
+    (LO จัดการ spill extent ของ Excel 365 ไม่ถูกต้อง — ตรวจพบ 11-Jun)
+  - branch summary ซ้าย (C-col SUMIFS) inject เช่นกัน เพราะ SUMIFS เทียบ text-date ไม่ติดใน LO
+  - ⭐ side effect: ช่อง Actual Sales Closed / AR ในซ้าย ที่ว่างมาตลอด (bug §16) แสดงค่าถูกต้องแล้ว
+- `daily_report.py generate_daily_pdfs()`: ไม่มี pywin32 → fallback เรียก pdf_libre.py อัตโนมัติ
+  (Windows + Excel ทำงานเหมือนเดิมทุกประการ)
+- New `.github/workflows/daily-report.yml` — รันทุกวัน 06:00 ไทยบน ubuntu-latest (cloud, ไม่ง้อ laptop)
+- Verified: LO output for 9-Jun ตรงกับ Excel run ที่ดี (20 rows, ทุก sum, CR 24,803) ทุกตัวเลข
+- ⚠ ตรวจพบ: Excel COM run เช้า 11-Jun (6:00) export ก่อน recalc เสร็จ → HAY 10-Jun แสดง 3/14 แถว
+  + summary ว่าง (อีเมลที่ส่งเช้านั้น under-report) — LO path เรียก calculateAll ก่อน export เสมอ
+
 ### v3.12 — Graph secret expiry warning (Jun 10)
 - Optional `GRAPH_SECRET_EXPIRES=YYYY-MM-DD` in `.env`
 - Helper `_check_secret_expiry()` returns (days, severity, message)

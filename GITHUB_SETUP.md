@@ -1,30 +1,34 @@
-# GitHub Setup — HAY Sale Report
+# GitHub Setup — HAY Sale Report (Cloud 100%)
 
-> สร้างเมื่อ 11 Jun 2026 — ขั้นตอนนำโปรเจคขึ้น GitHub + รันอัตโนมัติ
+> อัปเดต 11 Jun 2026 (v3.13) — รันอัตโนมัติบน GitHub cloud **ไม่ต้องเปิดเครื่องตัวเองเลย**
 
-## ⚠️ ข้อจำกัดสำคัญที่ต้องเข้าใจก่อน
+## ระบบทำงานอย่างไร
 
-Pipeline นี้ **export PDF ผ่าน Microsoft Excel COM (win32com)** ซึ่งหมายความว่า:
+- GitHub Actions รัน pipeline บนเครื่อง cloud ของ GitHub (`ubuntu-latest`) ทุกวัน
+  **06:00 เวลาไทย** (23:00 UTC) — laptop ปิดเครื่องได้เลย
+- ส่วน Export PDF เปลี่ยนจาก Microsoft Excel COM → **LibreOffice headless**
+  (`pdf_libre.py`) เพราะเครื่อง cloud ไม่มี Excel
+- บนเครื่อง Windows ของคุณ ทุกอย่างยังทำงานเหมือนเดิม 100% — `run_fetch_odoo.bat`
+  ยังใช้ Excel ตามปกติ (โค้ดเลือกเองอัตโนมัติ: มี pywin32 → Excel, ไม่มี → LibreOffice)
+- อีเมล + PDF attachment ส่งผ่าน Microsoft Graph API เหมือนเดิมทุกประการ
+- PDF ทุกรอบเก็บเป็น Artifact บน GitHub 30 วัน (ดาวน์โหลดย้อนหลังได้)
 
-- **GitHub-hosted runner (cloud) รันไม่ได้** — เครื่อง cloud ของ GitHub ไม่มี Excel ติดตั้ง
-- การรันอัตโนมัติผ่าน GitHub Actions ต้องใช้ **self-hosted runner** = ติดตั้งตัว runner
-  บนเครื่อง Windows ที่มี Excel (เช่น laptop เครื่องนี้)
-- เครื่องที่เป็น runner ยังต้องเปิดอยู่ + logged in ตอน 6 โมงเช้า
-  (ข้อจำกัดเดียวกับ Task Scheduler ปัจจุบันทุกประการ)
+## ⚠️ ข้อควรรู้ก่อนใช้
 
-**สิ่งที่ GitHub Actions ให้เพิ่มจาก Task Scheduler:**
-- กดรันจากมือถือ/เครื่องอื่นได้ (workflow_dispatch + เลือกวันที่ได้)
-- ดู log ทุกรอบบนเว็บ + ดาวน์โหลด PDF ย้อนหลังจาก Artifacts
-- โค้ดมี version control — rollback ได้ทุกเวอร์ชัน
-
-**ถ้าอยากรันบน cloud 100% (ไม่ง้อ laptop):** ต้องเขียนส่วน PDF ใหม่ให้ไม่ใช้ Excel
-(เช่น LibreOffice headless) — เป็นงาน rewrite แยกต่างหาก ยังไม่ได้ทำ
+1. **PDF จาก LibreOffice อาจหน้าตาต่างจาก Excel เล็กน้อย** (font substitution,
+   การตัดหน้า) — รอบแรก ๆ ให้เปิดเทียบกับ PDF เดิมที่ Excel สร้าง ถ้า layout เพี้ยน
+   ให้แจ้ง Claude ปรับ
+2. **Schedule ของ GitHub อาจคลาดเวลาได้ ~15-30 นาที** ช่วงที่ระบบหนาแน่น
+   (อีเมลอาจมาถึง 6:00-6:45 น.)
+3. **Repo ที่ไม่มี commit ใหม่เกิน 60 วัน → GitHub ปิด schedule อัตโนมัติ**
+   จะมีอีเมลเตือนจาก GitHub ให้กด "Enable workflow" ใน tab Actions
+4. ต้องเป็น **private repo** เท่านั้น
 
 ---
 
 ## ขั้นตอนที่ 1 — สร้าง repo และ push (ทำครั้งเดียว)
 
-Repo ในเครื่องถูก init + commit ไว้ให้แล้ว เหลือแค่ push:
+Repo ในเครื่องถูก init + commit ไว้ให้แล้ว เหลือแค่:
 
 1. ติดตั้ง GitHub CLI: `winget install GitHub.cli` (เปิด PowerShell ใหม่หลังติดตั้ง)
 2. Login: `gh auth login` (เลือก GitHub.com → HTTPS → browser login)
@@ -35,55 +39,49 @@ cd "C:\Users\WP Admin\Desktop\01-Sale Report"
 gh repo create hay-sale-report --private --source . --push
 ```
 
-> ⚠️ ต้องเป็น **private** เท่านั้น — โค้ดมีรายละเอียดธุรกิจ/email ภายใน
-
 ## ขั้นตอนที่ 2 — เพิ่ม Secret `.env`
 
 ไฟล์ `.env` ไม่ถูก commit (มีรหัสผ่าน Odoo + Graph client secret)
-ต้องเอาเนื้อหาไปใส่เป็น GitHub Secret เพื่อให้ workflow สร้าง `.env` เองตอนรัน:
+Workflow จะสร้าง `.env` ขึ้นเองตอนรันจาก GitHub Secret:
 
 1. เปิด repo บนเว็บ → **Settings → Secrets and variables → Actions**
 2. **New repository secret** → Name: `ENV_FILE`
 3. Value: copy เนื้อหา **ทั้งไฟล์** `.env` ในเครื่องนี้วางลงไป
-4. เมื่อ rotate secret ในอนาคต → แก้ทั้ง `.env` ในเครื่อง และ Secret บน GitHub
+4. เมื่อ rotate secret ในอนาคต → แก้ทั้ง `.env` ในเครื่อง **และ** Secret บน GitHub
 
-## ขั้นตอนที่ 3 — ติดตั้ง Self-hosted Runner
-
-1. เปิด repo บนเว็บ → **Settings → Actions → Runners → New self-hosted runner**
-2. เลือก **Windows x64** แล้วทำตามคำสั่งที่หน้าจอแสดง (download + `config.cmd`)
-3. ตอน config ใส่ label เพิ่ม: `Windows` (workflow ใช้ `runs-on: [self-hosted, Windows]`)
-4. **สำคัญ:** start runner แบบ interactive ด้วย `run.cmd` — **อย่าติดตั้งเป็น Windows
-   service** เพราะ Excel COM ใช้ไม่ได้ใน session แบบ non-interactive
-5. ตั้งให้ `run.cmd` เปิดอัตโนมัติตอน login: ใส่ shortcut ใน
-   `shell:startup` (Win+R → `shell:startup`)
-
-## ขั้นตอนที่ 4 — ทดสอบ
+## ขั้นตอนที่ 3 — ทดสอบ
 
 1. เปิด repo → **Actions → Daily Sale Report → Run workflow**
 2. ใส่วันที่ทดสอบ (เช่น `2026-06-10`) หรือเว้นว่าง = เมื่อวาน
-3. ดู log สด ๆ บนหน้าเว็บ — ถ้าสำเร็จจะมีอีเมลส่ง + PDF อยู่ใน Artifacts
+3. ดู log สดบนหน้าเว็บ — สำเร็จ = มีอีเมลส่งถึงผู้รับ + PDF อยู่ใน Artifacts ท้ายหน้า run
+4. **เปิด PDF เทียบกับของวันเดียวกันที่ Excel เคยสร้าง** (`Daily PDFs\2026\Jun\10\`)
+   ว่า layout / ตัวเลข / ภาษาไทย ถูกต้อง
 
-## ⚠️ อย่ารัน 2 ระบบซ้อนกัน
+## ขั้นตอนที่ 4 — ปิด Task Scheduler ตัวเดิม
 
-ถ้า GitHub Actions schedule ทำงานแล้ว ให้ **ปิด Task Scheduler ตัวเดิม** ไม่งั้น
-อีเมลจะถูกส่ง 2 รอบทุกเช้า:
+เมื่อ GitHub รันได้แล้ว ปิดตัวเดิมบน laptop ไม่งั้นอีเมลส่งซ้ำ 2 รอบทุกเช้า:
 
 ```powershell
-# run as Administrator
+# run as Administrator ใน folder นี้
 .\unregister_scheduled_task.ps1
 ```
 
-(หรือกลับกัน — ใช้ Task Scheduler ต่อ แล้วใช้ GitHub แค่เก็บโค้ด ก็ได้เช่นกัน
-โดยลบ schedule block ออกจาก `.github/workflows/daily-report.yml`)
+(`run_fetch_odoo.bat` ยังเก็บไว้กดรัน manual ในเครื่องได้ตามเดิม)
 
-## การ push การแก้ไขในอนาคต
+---
 
-```powershell
-cd "C:\Users\WP Admin\Desktop\01-Sale Report"
-git add -A
-git commit -m "describe change"
-git push
-```
+## การใช้งานประจำวัน
 
-> หมายเหตุ: self-hosted runner จะ checkout โค้ดจาก GitHub มารันใน folder ของ runner เอง
-> (`actions-runner\_work\...`) ไม่ใช่ folder นี้ — แก้โค้ดแล้วต้อง push ก่อน รอบถัดไปถึงจะมีผล
+| ต้องการ | วิธี |
+|---------|------|
+| รายงานอัตโนมัติทุกเช้า | ไม่ต้องทำอะไร — GitHub รันเอง 6 โมงเช้า |
+| สั่งรันทันที / เลือกวันย้อนหลัง | เว็บ/แอป GitHub → Actions → Run workflow → ใส่วันที่ |
+| ดู log การรัน | Actions → เลือก run ที่ต้องการ |
+| โหลด PDF ย้อนหลัง | Actions → run นั้น ๆ → Artifacts (เก็บ 30 วัน) |
+| เปลี่ยนผู้รับอีเมล | แก้ Secret `ENV_FILE` บน GitHub (และ `.env` ในเครื่องให้ตรงกัน) |
+| แก้โค้ด | แก้ในเครื่อง → `git add -A; git commit -m "..."; git push` |
+
+## เปลี่ยนเวลารัน
+
+แก้บรรทัด cron ใน [.github/workflows/daily-report.yml](.github/workflows/daily-report.yml)
+— ค่าเป็น **UTC** (เวลาไทย −7 ชม.) เช่น รัน 07:00 ไทย = `0 0 * * *` แล้ว push
