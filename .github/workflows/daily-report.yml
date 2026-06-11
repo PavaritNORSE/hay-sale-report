@@ -1,0 +1,70 @@
+# HAY Sale Report — daily automated run
+#
+# IMPORTANT: This workflow CANNOT run on GitHub-hosted runners (windows-latest)
+# because the pipeline exports PDFs via Microsoft Excel COM (win32com), and
+# GitHub-hosted runners do not have Excel installed.
+#
+# It requires a SELF-HOSTED Windows runner with:
+#   - Microsoft Excel installed + licensed
+#   - Python 3.9+ on PATH
+#   - The runner started INTERACTIVELY (run.cmd in a logged-in session),
+#     NOT as a Windows service — Excel COM does not work reliably in
+#     non-interactive Session 0.
+# Setup steps: see GITHUB_SETUP.md
+name: Daily Sale Report
+
+on:
+  schedule:
+    # 06:00 Asia/Bangkok = 23:00 UTC the previous day
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Report date YYYY-MM-DD (leave blank = yesterday)'
+        required: false
+        default: ''
+
+jobs:
+  report:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # .env is gitignored — recreate it from the ENV_FILE repository secret
+      # (Settings > Secrets and variables > Actions > New repository secret,
+      #  name ENV_FILE, value = full contents of your local .env)
+      - name: Write .env from secret
+        shell: powershell
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: Set-Content -Path .env -Value $env:ENV_FILE -Encoding utf8
+
+      - name: Install Python dependencies
+        shell: powershell
+        run: python -m pip install --quiet pywin32 requests python-dotenv
+
+      - name: Kill stale Excel processes
+        shell: powershell
+        run: try { Stop-Process -Name EXCEL -Force -ErrorAction Stop } catch {}
+
+      - name: Run pipeline
+        shell: powershell
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+        run: |
+          if ('${{ inputs.date }}' -ne '') {
+            python daily_report.py --fetch-odoo --date '${{ inputs.date }}'
+          } else {
+            python daily_report.py --fetch-odoo
+          }
+
+      - name: Upload PDFs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-pdfs
+          path: Daily PDFs/**
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,17 @@
+# Secrets — never commit (use .env.example as template)
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Generated output — rebuilt from "Sales Report V3.1.xlsm.bak" template every run
+# (the .bak template itself IS committed)
+Sales Report V3.1.xlsm
+Daily PDFs/
+
+# Local archive — old script versions contain hardcoded credentials
+_Archive/
+
+# Excel temp/lock files
+~$*
