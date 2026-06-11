@@ -27,6 +27,10 @@ concurrency:
   group: daily-report
   cancel-in-progress: false
 
+# Least privilege: the job only needs to read the repo (checkout).
+permissions:
+  contents: read
+
 jobs:
   report:
     runs-on: ubuntu-latest
