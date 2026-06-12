@@ -12,9 +12,13 @@ name: Daily Sale Report
 
 on:
   schedule:
-    # 06:00 Asia/Bangkok = 23:00 UTC the previous day.
-    # GitHub may delay scheduled runs by up to ~15-30 min at busy times.
-    - cron: '0 23 * * *'
+    # GitHub drops/delays crons on busy round-hour slots (the original
+    # '0 23 * * *' never fired on 11-Jun-2026). Two staggered off-peak
+    # crons: primary 22:43 UTC = 05:43 Bangkok, backup 23:27 UTC = 06:27
+    # Bangkok. The guard job skips the backup when the primary already
+    # ran, so recipients never get two emails.
+    - cron: '43 22 * * *'
+    - cron: '27 23 * * *'
   workflow_dispatch:
     inputs:
       date:
@@ -27,12 +31,45 @@ concurrency:
   group: daily-report
   cancel-in-progress: false
 
-# Least privilege: the job only needs to read the repo (checkout).
+# Least privilege: read repo (checkout) + read run history (backup guard).
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  # Decide whether this trigger should produce a report. Manual runs and
+  # the primary cron always run; the backup cron runs only if no other
+  # scheduled run succeeded (or is still going) in the last 3 hours.
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ] || \
+             [ "${{ github.event.schedule }}" != "27 23 * * *" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          SINCE=$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          N=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=schedule&created=>${SINCE}" \
+              --jq "[.workflow_runs[] | select(.id != ${GITHUB_RUN_ID})
+                     | select(.conclusion == \"success\" or .status == \"in_progress\" or .status == \"queued\")]
+                    | length")
+          if [ "$N" -gt 0 ]; then
+            echo "Primary scheduled run already handled today's report - skipping backup."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No successful primary run found - backup takes over."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   report:
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
