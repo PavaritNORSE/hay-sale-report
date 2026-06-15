@@ -1,11 +1,12 @@
 # GitHub Setup — HAY Sale Report (Cloud 100%)
 
-> อัปเดต 11 Jun 2026 (v3.13) — รันอัตโนมัติบน GitHub cloud **ไม่ต้องเปิดเครื่องตัวเองเลย**
+> อัปเดต 15 Jun 2026 (v3.14) — รันอัตโนมัติบน GitHub cloud **ไม่ต้องเปิดเครื่องตัวเองเลย**
 
 ## ระบบทำงานอย่างไร
 
-- GitHub Actions รัน pipeline บนเครื่อง cloud ของ GitHub (`ubuntu-latest`) ทุกวัน
-  **06:00 เวลาไทย** (23:00 UTC) — laptop ปิดเครื่องได้เลย
+- **cron-job.org** (ฟรี) เรียก GitHub API ตรงเวลา **06:00 เวลาไทย** (23:00 UTC) ทุกวัน
+  → GitHub Actions รัน pipeline บนเครื่อง cloud (`ubuntu-latest`) — laptop ปิดเครื่องได้เลย
+- Backup: ถ้า cron-job.org ล้มเหลว GitHub schedule จะ kick in ให้อัตโนมัติ (~08:47 น.)
 - ส่วน Export PDF เปลี่ยนจาก Microsoft Excel COM → **LibreOffice headless**
   (`pdf_libre.py`) เพราะเครื่อง cloud ไม่มี Excel
 - บนเครื่อง Windows ของคุณ ทุกอย่างยังทำงานเหมือนเดิม 100% — `run_fetch_odoo.bat`
@@ -18,11 +19,57 @@
 1. **PDF จาก LibreOffice อาจหน้าตาต่างจาก Excel เล็กน้อย** (font substitution,
    การตัดหน้า) — รอบแรก ๆ ให้เปิดเทียบกับ PDF เดิมที่ Excel สร้าง ถ้า layout เพี้ยน
    ให้แจ้ง Claude ปรับ
-2. **Schedule ของ GitHub อาจคลาดเวลาได้ ~15-30 นาที** ช่วงที่ระบบหนาแน่น
-   (อีเมลอาจมาถึง 6:00-6:45 น.)
+2. **Primary trigger คือ cron-job.org** (ดูขั้นตอนที่ 3 ด้านล่าง) — ถ้ายังไม่ได้ตั้ง
+   อีเมลจะมาถึง ~8:47 น. แทน (backup schedule ของ GitHub Actions)
 3. **Repo ที่ไม่มี commit ใหม่เกิน 60 วัน → GitHub ปิด schedule อัตโนมัติ**
    จะมีอีเมลเตือนจาก GitHub ให้กด "Enable workflow" ใน tab Actions
 4. ต้องเป็น **private repo** เท่านั้น
+
+---
+
+---
+
+## ขั้นตอนที่ 3 — ตั้ง External Scheduler (cron-job.org) ⬅ สำคัญมาก
+
+> **ทำไมต้องมี?** GitHub's built-in schedule ที่ 23:00 UTC (6 โมงเช้าไทย) ล่าช้าได้ถึง ~12 ชม.
+> เพราะเป็นช่วง peak traffic ของ GitHub → อีเมลมาถึงตอน 5 โมงเย็น
+> cron-job.org จะ "กด Run" แทนเราตรงเวลาผ่าน GitHub API — ฟรี ไม่ต้องเปิดเครื่อง
+
+### 3.1 สร้าง GitHub PAT (Personal Access Token)
+
+1. GitHub.com → ชื่อผู้ใช้ (มุมขวาบน) → **Settings**
+2. เลื่อนลงสุด → **Developer settings** → **Personal access tokens** → **Fine-grained tokens**
+3. **Generate new token**
+   - Token name: `cron-job.org trigger`
+   - Expiration: **1 year** (จะมีอีเมลเตือนก่อนหมดอายุ)
+   - Repository access: **Only select repositories** → `hay-sale-report`
+   - Permissions → **Actions** → `Read and write`
+4. กด **Generate token** → copy token ทันที (ดูได้ครั้งเดียว)
+
+### 3.2 ตั้ง cron-job.org
+
+1. เปิด **https://cron-job.org** → สมัครฟรี → Login
+2. **CREATE CRONJOB**
+3. ตั้งค่าดังนี้:
+
+| ช่อง | ค่า |
+|------|-----|
+| Title | HAY Sale Report trigger |
+| URL | `https://api.github.com/repos/PavaritNORSE/hay-sale-report/actions/workflows/daily-report.yml/dispatches` |
+| Execution schedule | เลือก **Custom** → เวลา `23:00` UTC ทุกวัน |
+| Request method | **POST** |
+| Request body | `{"ref":"main"}` |
+
+4. กด **Advanced** → เพิ่ม Headers 2 ตัว:
+   - `Authorization` = `Bearer ghp_XXXXXXXXXXXXXXXX` (ใส่ token จาก 3.1)
+   - `Accept` = `application/vnd.github+json`
+5. **CREATE** → ทดสอบกด **Run now** ดูว่า HTTP 204 = สำเร็จ
+
+### 3.3 ทดสอบ end-to-end
+
+1. กด **Run now** บน cron-job.org
+2. เปิด GitHub → Actions → ควรเห็น run ใหม่ (`workflow_dispatch`)
+3. รอ ~2 นาที → มีอีเมลส่งออกไป
 
 ---
 
@@ -83,5 +130,5 @@ Workflow จะสร้าง `.env` ขึ้นเองตอนรันจ
 
 ## เปลี่ยนเวลารัน
 
-แก้บรรทัด cron ใน [.github/workflows/daily-report.yml](.github/workflows/daily-report.yml)
-— ค่าเป็น **UTC** (เวลาไทย −7 ชม.) เช่น รัน 07:00 ไทย = `0 0 * * *` แล้ว push
+เวลารันปรับที่ **cron-job.org** (Execution schedule) ตรง ๆ ไม่ต้องแก้โค้ด
+— เวลาบนเว็บ cron-job.org คือ UTC (เวลาไทย −7 ชม.) เช่น อยาก 07:00 ไทย = 00:00 UTC

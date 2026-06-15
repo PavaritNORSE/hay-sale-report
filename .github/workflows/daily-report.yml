@@ -6,19 +6,19 @@
 # NOTE: do NOT add actions/setup-python here — pdf_libre.py needs the
 # SYSTEM python3 (the one python3-uno installs into).
 #
+# PRIMARY TRIGGER: cron-job.org calls workflow_dispatch at 23:00 UTC (06:00 Bangkok).
+#   See GITHUB_SETUP.md > "External Scheduler" for setup instructions.
+#
 # Required repository secret:
 #   ENV_FILE = full contents of the local .env file
 name: Daily Sale Report
 
 on:
   schedule:
-    # GitHub drops/delays crons on busy round-hour slots (the original
-    # '0 23 * * *' never fired on 11-Jun-2026). Two staggered off-peak
-    # crons: primary 22:43 UTC = 05:43 Bangkok, backup 23:27 UTC = 06:27
-    # Bangkok. The guard job skips the backup when the primary already
-    # ran, so recipients never get two emails.
-    - cron: '43 22 * * *'
-    - cron: '27 23 * * *'
+    # Emergency backup only — fires at 01:47 UTC = 08:47 Bangkok.
+    # GitHub's scheduler is reliable at this low-traffic UTC hour.
+    # Skipped automatically when cron-job.org already dispatched today.
+    - cron: '47 1 * * *'
   workflow_dispatch:
     inputs:
       date:
@@ -37,9 +37,8 @@ permissions:
   actions: read
 
 jobs:
-  # Decide whether this trigger should produce a report. Manual runs and
-  # the primary cron always run; the backup cron runs only if no other
-  # scheduled run succeeded (or is still going) in the last 3 hours.
+  # workflow_dispatch (from cron-job.org or manual) always runs.
+  # The backup schedule runs only if no dispatch succeeded in the last 12 h.
   guard:
     runs-on: ubuntu-latest
     outputs:
@@ -49,21 +48,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ github.event_name }}" != "schedule" ] || \
-             [ "${{ github.event.schedule }}" != "27 23 * * *" ]; then
+          if [ "${{ github.event_name }}" != "schedule" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          SINCE=$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)
-          N=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=schedule&created=>${SINCE}" \
+          SINCE=$(date -u -d '12 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          N=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=workflow_dispatch&created=>${SINCE}" \
               --jq "[.workflow_runs[] | select(.id != ${GITHUB_RUN_ID})
                      | select(.conclusion == \"success\" or .status == \"in_progress\" or .status == \"queued\")]
                     | length")
           if [ "$N" -gt 0 ]; then
-            echo "Primary scheduled run already handled today's report - skipping backup."
+            echo "Primary dispatch already ran - skipping backup schedule."
             echo "run=false" >> "$GITHUB_OUTPUT"
           else
-            echo "No successful primary run found - backup takes over."
+            echo "No dispatch found in last 12 h - backup schedule takes over."
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
 
