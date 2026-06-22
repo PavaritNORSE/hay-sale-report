@@ -2018,6 +2018,10 @@ def _generate_daily_pdfs_libreoffice(xlsm_path, report_date=None):
         p = os.path.join(pdf_dir, f'{branch_safe}_{date_str}.pdf')
         if os.path.exists(p):
             generated.append((branch, p))
+    # Prepend summary PDF so it appears first in the email attachment list.
+    summary_p = os.path.join(pdf_dir, f'Summary_{date_str}.pdf')
+    if os.path.exists(summary_p):
+        generated.insert(0, ('Summary', summary_p))
     return generated
 
 def _wait_excel_ready(xl, timeout=60):

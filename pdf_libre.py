@@ -254,6 +254,120 @@ def _last_used_row_col_I(sheet):
     return 0
 
 
+def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, report_date, outdir):
+    """Create a one-page summary PDF: all branches × (Orders, Sales Closed,
+    Cash Received, AR) in a single table.  Saved as Summary_DD-MMM-YYYY.pdf
+    in outdir.  Returns the path on success, None on failure."""
+    date_str = report_date.strftime('%d-%b-%Y')
+    sdoc = None
+    try:
+        sdoc = desktop.loadComponentFromURL(
+            'private:factory/scalc', '_blank', 0, ())
+        sheet = sdoc.Sheets.getByIndex(0)
+
+        # ── number format #,##0 ───────────────────────────────────────────
+        locale = uno.createUnoStruct('com.sun.star.lang.Locale')
+        fmts   = sdoc.getNumberFormats()
+        num_key = fmts.queryKey('#,##0', locale, False)
+        if num_key == -1:
+            num_key = fmts.addNew('#,##0', locale)
+
+        # ── helpers ───────────────────────────────────────────────────────
+        def _c(r, c):
+            return sheet.getCellByPosition(c, r)
+
+        def _style(r, c, bold=False, bg=None, fg=None, height=None):
+            cell = _c(r, c)
+            if bold:   cell.CharWeight = 150      # BOLD
+            if bg is not None: cell.CellBackColor = bg
+            if fg is not None: cell.CharColor = fg
+            if height:  cell.CharHeight = height
+
+        # ── title (row 0) ─────────────────────────────────────────────────
+        _c(0, 0).setString(f'Daily Sales Summary  —  {date_str}')
+        _style(0, 0, bold=True, height=13)
+
+        # ── column headers (row 2) ────────────────────────────────────────
+        BLUE, WHITE = 0x2F5496, 0xFFFFFF
+        GRAY        = 0xD9E1F2   # alternating row tint
+        headers = ['Branch', 'Orders', 'Sales Closed', 'Cash Received', 'AR']
+        for col, h in enumerate(headers):
+            _c(2, col).setString(h)
+            _style(2, col, bold=True, bg=BLUE, fg=WHITE)
+
+        # ── column widths (1/100 mm) ──────────────────────────────────────
+        for col, w in enumerate([4500, 2200, 3800, 3800, 3200]):
+            sheet.Columns.getByIndex(col).Width = w
+
+        # ── data rows (rows 3-9) ──────────────────────────────────────────
+        total_orders = 0
+        total_asc = total_cr = total_ar = 0.0
+
+        for i, branch in enumerate(DAILY_BRANCHES):
+            r      = 3 + i
+            orders = len(by_branch.get(branch, []))
+            asc, ar = ytd_sums.get(branch, (0.0, 0.0))
+            cr     = cr_sums.get(branch, 0.0)
+
+            _c(r, 0).setString(branch)
+            for col, v in enumerate([orders, asc, cr, ar], 1):
+                cell = _c(r, col)
+                cell.setValue(v)
+                cell.NumberFormat = num_key
+
+            if i % 2 == 1:                        # alternating tint
+                for col in range(5):
+                    _c(r, col).CellBackColor = GRAY
+
+            total_orders += orders
+            total_asc    += asc
+            total_cr     += cr
+            total_ar     += ar
+
+        # ── total row ─────────────────────────────────────────────────────
+        tr = 3 + len(DAILY_BRANCHES)
+        _c(tr, 0).setString('TOTAL')
+        for col, v in enumerate([total_orders, total_asc, total_cr, total_ar], 1):
+            cell = _c(tr, col)
+            cell.setValue(v)
+            cell.NumberFormat = num_key
+        for col in range(5):
+            _style(tr, col, bold=True, bg=BLUE, fg=WHITE)
+
+        # ── page setup: fit to 1 page, portrait ──────────────────────────
+        ps = sdoc.StyleFamilies.getByName('PageStyles').getByName(sheet.PageStyle)
+        ps.ScaleToPagesX = 1
+        ps.ScaleToPagesY = 1
+        ps.LeftMargin = ps.RightMargin = ps.TopMargin = ps.BottomMargin = 1000
+        ps.HeaderIsOn = False
+        ps.FooterIsOn = False
+
+        area = uno.createUnoStruct('com.sun.star.table.CellRangeAddress')
+        area.Sheet      = 0
+        area.StartColumn, area.EndColumn = 0, 4
+        area.StartRow,    area.EndRow    = 0, tr
+        sheet.setPrintAreas((area,))
+
+        # ── export ────────────────────────────────────────────────────────
+        pdf_path = os.path.join(outdir, f'Summary_{date_str}.pdf')
+        sdoc.storeToURL(
+            uno.systemPathToFileUrl(os.path.abspath(pdf_path)),
+            (_prop('FilterName', 'calc_pdf_Export'), _prop('Overwrite', True)))
+        print(f'[PDF-LO]   OK Summary          -> Summary_{date_str}.pdf')
+        return pdf_path
+
+    except Exception as e:
+        print(f'[PDF-LO]   WARN summary PDF failed: {e}')
+        traceback.print_exc()
+        return None
+    finally:
+        if sdoc is not None:
+            try:
+                sdoc.close(False)
+            except Exception:
+                pass
+
+
 def generate(xlsm_path, report_date, outdir):
     soffice = find_soffice()
     if not soffice:
@@ -369,6 +483,9 @@ def generate(xlsm_path, report_date, outdir):
               f'files in: {outdir}')
         if generated < len(DAILY_BRANCHES):
             exit_code = 1
+
+        _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums,
+                               report_date, outdir)
         return exit_code
 
     except Exception as e:
