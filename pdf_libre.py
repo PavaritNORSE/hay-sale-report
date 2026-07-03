@@ -422,6 +422,13 @@ def generate(xlsm_path, report_date, outdir):
         sheet.getCellByPosition(6, 2).setValue(report_date.year)
         doc.calculateAll()
 
+        # Column C (index 2) holds branch-summary figures. LO may render the
+        # xlsm column width slightly narrower than Excel, causing "###" for
+        # large values. Enforce a minimum of 3 cm to prevent this.
+        col_c = sheet.Columns.getByIndex(2)
+        if col_c.Width < 3000:
+            col_c.Width = 3000
+
         # Replace the dynamic-array detail table with injected values
         # (see the note above _YTD_SRC_COLS for why).
         by_branch, ytd_sums = _read_ytd_rows(doc, date_str)
