@@ -25,10 +25,15 @@ on:
         description: 'Report date YYYY-MM-DD (leave blank = yesterday, Bangkok time)'
         required: false
         default: ''
+      recipients:
+        description: 'Override EMAIL_TO (e.g. operation@norserepublic.com). Leave blank = use .env default.'
+        required: false
+        default: ''
 
-# Never run two reports at the same time (e.g. manual + scheduled overlap)
+# Each recipients-group runs independently so the 6 AM and noon jobs
+# never block each other.
 concurrency:
-  group: daily-report
+  group: daily-report-${{ inputs.recipients || 'default' }}
   cancel-in-progress: false
 
 # Least privilege: read repo (checkout) + read run history (backup guard).
@@ -87,7 +92,13 @@ jobs:
       - name: Write .env from secret
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
-        run: printf '%s\n' "$ENV_FILE" > .env
+          RECIPIENTS: ${{ inputs.recipients }}
+        run: |
+          printf '%s\n' "$ENV_FILE" > .env
+          if [ -n "$RECIPIENTS" ]; then
+            sed -i "s|^EMAIL_TO=.*|EMAIL_TO=$RECIPIENTS|" .env
+            sed -i "s|^EMAIL_CC=.*|EMAIL_CC=|" .env
+          fi
 
       - name: Run pipeline
         env:
