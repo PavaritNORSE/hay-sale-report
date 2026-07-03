@@ -463,6 +463,10 @@ def generate(xlsm_path, report_date, outdir):
             _write_panel(sheet, branch, ytd_sums, cr_sums)
             doc.calculateAll()
 
+            # Auto-fit all columns A–V so no cell shows ### regardless of value.
+            for _ci in range(22):
+                sheet.Columns.getByIndex(_ci).OptimalWidth = True
+
             last_row = max(41, _last_used_row_col_I(sheet))
 
             area = uno.createUnoStruct('com.sun.star.table.CellRangeAddress')
