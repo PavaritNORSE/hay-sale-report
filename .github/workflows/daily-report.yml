@@ -29,6 +29,10 @@ on:
         description: 'Override EMAIL_TO (e.g. operation@norserepublic.com). Leave blank = use .env default.'
         required: false
         default: ''
+      use_today:
+        description: 'true = report for today (Bangkok time); leave blank = yesterday'
+        required: false
+        default: ''
 
 # Each recipients-group runs independently so the 6 AM and noon jobs
 # never block each other.
@@ -107,6 +111,9 @@ jobs:
         run: |
           if [ -n "${{ inputs.date }}" ]; then
             python3 daily_report.py --fetch-odoo --date "${{ inputs.date }}"
+          elif [ "${{ inputs.use_today }}" = "true" ]; then
+            TODAY=$(TZ=Asia/Bangkok date +%Y-%m-%d)
+            python3 daily_report.py --fetch-odoo --date "$TODAY"
           else
             python3 daily_report.py --fetch-odoo
           fi
