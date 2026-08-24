@@ -32,12 +32,19 @@ import argparse
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import time
 import traceback
 from datetime import datetime
+
+_LO_TIMEOUT_SECS = 1200  # 20 minutes — kill soffice if it hangs this long
+
+def _alarm_handler(signum, frame):
+    raise TimeoutError(f'[PDF-LO] LibreOffice did not finish within '
+                       f'{_LO_TIMEOUT_SECS // 60} minutes — possible hang')
 
 try:
     import uno
@@ -383,6 +390,9 @@ def generate(xlsm_path, report_date, outdir):
     doc = None
     exit_code = 0
     print(f'[PDF-LO] soffice: {soffice}')
+    if hasattr(signal, 'SIGALRM'):
+        signal.signal(signal.SIGALRM, _alarm_handler)
+        signal.alarm(_LO_TIMEOUT_SECS)
     try:
         proc = _start_soffice(soffice, profile_dir, port)
         ctx = _connect(port)
@@ -499,11 +509,16 @@ def generate(xlsm_path, report_date, outdir):
                                report_date, outdir)
         return exit_code
 
+    except TimeoutError as e:
+        print(e)
+        return 1
     except Exception as e:
         print(f'[PDF-LO] ERROR: {e}')
         traceback.print_exc()
         return 1
     finally:
+        if hasattr(signal, 'SIGALRM'):
+            signal.alarm(0)
         try:
             if doc is not None:
                 doc.close(False)
