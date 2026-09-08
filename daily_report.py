@@ -1558,6 +1558,9 @@ def main():
                         help='Report date YYYY-MM-DD (default: today). PDFs '
                              'for this date are regenerated and the email '
                              'subject/folder reflect the chosen date.')
+    parser.add_argument('--excel-only', action='store_true',
+                        help='Email the patched XLSM file directly (skip PDF). '
+                             'Used for on-demand requests from Odoo.')
     args = parser.parse_args()
 
     # v3.7: parse --date into a tz-aware datetime
@@ -1728,6 +1731,15 @@ def main():
     print("Done! Total time: %.1fs" % elapsed)
     print("  File: " + XLSM)
 
+    # ── Excel-only mode (on-demand request from Odoo) ────────────────────────
+    if args.excel_only:
+        try:
+            send_excel_email(XLSM, report_date=report_date)
+        except Exception as e:
+            print(f'\n[EMAIL] ERROR: {e}')
+            traceback.print_exc()
+        return
+
     # ── Generate Daily PDFs ──────────────────────────────────────────────────
     # v3.6: capture list of (branch, pdf_path) so we can email + check coverage.
     # v3.7: pass report_date so the PDFs land in the chosen day's folder.
@@ -1802,12 +1814,14 @@ def _post_graph_message(subject, body_text, attachments_bin=None):
     token = _get_access_token()
     msg_attachments = []
     if attachments_bin:
-        for fname, raw in attachments_bin:
+        for entry in attachments_bin:
+            fname, raw = entry[0], entry[1]
+            ctype = entry[2] if len(entry) > 2 else 'application/octet-stream'
             b64 = base64.b64encode(raw).decode('ascii')
             msg_attachments.append({
                 '@odata.type':  '#microsoft.graph.fileAttachment',
                 'name':         fname,
-                'contentType':  'application/pdf',
+                'contentType':  ctype,
                 'contentBytes': b64,
             })
     # v3.11: To/CC/BCC all sourced from comma-separated env vars
@@ -1905,6 +1919,34 @@ def send_daily_email(pdf_paths, missing_branches=None, report_date=None):
     print(f"[EMAIL]  Sending {len(attachments_bin)} PDF(s) -> {_to_str}{_cc_str}{_bcc_str} ...")
     _post_graph_message(subject, body_text, attachments_bin)
     print(f"[EMAIL]  ✓ Sent successfully")
+
+
+def send_excel_email(xlsm_path, report_date=None):
+    """Email the patched XLSM file as an on-demand report (skip PDF generation).
+    Used when --excel-only is passed (triggered from Odoo Server Action).
+    """
+    today    = report_date or datetime.now(TZ_BKK)
+    date_str = today.strftime('%d-%b-%Y')
+    fname    = f'SaleReport_{date_str}.xlsm'
+    subject  = f'Sale Report (Excel) {today.day} {today.strftime("%b")} {today.year}'
+    body_text = '\n'.join([
+        'Dear All,',
+        '',
+        'Please find the requested sale report (Excel file) attached.',
+        '',
+        'Best Regards,',
+        'Operations',
+    ])
+    with open(xlsm_path, 'rb') as f:
+        raw = f.read()
+    attachments_bin = [(
+        fname, raw,
+        'application/vnd.ms-excel.sheet.macroEnabled.12'
+    )]
+    _to_str = EMAIL_TO if EMAIL_TO else '(no recipient!)'
+    print(f'[EMAIL]  Sending Excel -> {_to_str} ...')
+    _post_graph_message(subject, body_text, attachments_bin)
+    print(f'[EMAIL]  ✓ Sent successfully')
 
 
 def send_failure_email(error_msg, phase, trace_str=None, report_date=None):

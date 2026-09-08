@@ -33,6 +33,10 @@ on:
         description: 'true = report for today (Bangkok time); leave blank = yesterday'
         required: false
         default: ''
+      format:
+        description: 'excel = email raw XLSM file (on-demand); leave blank = PDF (default)'
+        required: false
+        default: ''
 
 # Each recipients-group runs independently so the 6 AM and noon jobs
 # never block each other.
@@ -109,13 +113,17 @@ jobs:
           PYTHONUTF8: '1'
           PYTHONIOENCODING: utf-8
         run: |
+          EXTRA_ARGS=""
+          if [ "${{ inputs.format }}" = "excel" ]; then
+            EXTRA_ARGS="--excel-only"
+          fi
           if [ -n "${{ inputs.date }}" ]; then
-            python3 daily_report.py --fetch-odoo --date "${{ inputs.date }}"
+            python3 daily_report.py --fetch-odoo --date "${{ inputs.date }}" $EXTRA_ARGS
           elif [ "${{ inputs.use_today }}" = "true" ]; then
             TODAY=$(TZ=Asia/Bangkok date +%Y-%m-%d)
-            python3 daily_report.py --fetch-odoo --date "$TODAY"
+            python3 daily_report.py --fetch-odoo --date "$TODAY" $EXTRA_ARGS
           else
-            python3 daily_report.py --fetch-odoo
+            python3 daily_report.py --fetch-odoo $EXTRA_ARGS
           fi
 
       - name: Upload PDFs as artifact
