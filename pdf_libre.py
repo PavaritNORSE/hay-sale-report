@@ -341,9 +341,43 @@ def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
         _style(0, 0, bold=True, height=13)
 
         # ═══════════════════════════════════════════════════════════════════
-        # TABLE 1 — Payment method breakdown (row 2 header)
+        # TABLE 1 (top) — Branch totals: Orders / Sales Closed / CR / AR
         # ═══════════════════════════════════════════════════════════════════
-        PM_HDR = 2
+        SUM_HDR = 2
+        for col, h in enumerate(['Branch', 'Orders', 'Sales Closed', 'Cash Received', 'AR']):
+            _c(SUM_HDR, col).setString(h)
+            _style(SUM_HDR, col, bold=True, bg=BLUE, fg=WHITE)
+
+        total_orders = 0
+        total_asc = total_cr = total_ar = 0.0
+
+        for i, branch in enumerate(DAILY_BRANCHES):
+            r = SUM_HDR + 1 + i
+            orders = len(by_branch.get(branch, []))
+            asc, ar = ytd_sums.get(branch, (0.0, 0.0))
+            cr = cr_sums.get(branch, 0.0)
+            _c(r, 0).setString(branch)
+            for col, v in enumerate([orders, asc, cr, ar], 1):
+                _num(r, col, v)
+            if i % 2 == 1:
+                for col in range(SUM_COLS):
+                    _c(r, col).CellBackColor = GRAY
+            total_orders += orders
+            total_asc    += asc
+            total_cr     += cr
+            total_ar     += ar
+
+        sum_tr = SUM_HDR + 1 + n_br
+        _c(sum_tr, 0).setString('TOTAL')
+        for col, v in enumerate([total_orders, total_asc, total_cr, total_ar], 1):
+            _num(sum_tr, col, v)
+        for col in range(SUM_COLS):
+            _style(sum_tr, col, bold=True, bg=BLUE, fg=WHITE)
+
+        # ═══════════════════════════════════════════════════════════════════
+        # TABLE 2 (bottom) — Payment method breakdown (2 rows below table 1)
+        # ═══════════════════════════════════════════════════════════════════
+        PM_HDR = sum_tr + 2
         for col, h in enumerate(['Branch'] + _PAYMENT_METHODS + ['Grand Total']):
             _c(PM_HDR, col).setString(h)
             _style(PM_HDR, col, bold=True, bg=BLUE, fg=WHITE)
@@ -375,40 +409,6 @@ def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
         for col in range(PM_COLS):
             _style(pm_tr, col, bold=True, bg=BLUE, fg=WHITE)
 
-        # ═══════════════════════════════════════════════════════════════════
-        # TABLE 2 — Branch totals (2 rows below table 1)
-        # ═══════════════════════════════════════════════════════════════════
-        SUM_HDR = pm_tr + 2
-        for col, h in enumerate(['Branch', 'Orders', 'Sales Closed', 'Cash Received', 'AR']):
-            _c(SUM_HDR, col).setString(h)
-            _style(SUM_HDR, col, bold=True, bg=BLUE, fg=WHITE)
-
-        total_orders = 0
-        total_asc = total_cr = total_ar = 0.0
-
-        for i, branch in enumerate(DAILY_BRANCHES):
-            r = SUM_HDR + 1 + i
-            orders = len(by_branch.get(branch, []))
-            asc, ar = ytd_sums.get(branch, (0.0, 0.0))
-            cr = cr_sums.get(branch, 0.0)
-            _c(r, 0).setString(branch)
-            for col, v in enumerate([orders, asc, cr, ar], 1):
-                _num(r, col, v)
-            if i % 2 == 1:
-                for col in range(SUM_COLS):
-                    _c(r, col).CellBackColor = GRAY
-            total_orders += orders
-            total_asc    += asc
-            total_cr     += cr
-            total_ar     += ar
-
-        sum_tr = SUM_HDR + 1 + n_br
-        _c(sum_tr, 0).setString('TOTAL')
-        for col, v in enumerate([total_orders, total_asc, total_cr, total_ar], 1):
-            _num(sum_tr, col, v)
-        for col in range(SUM_COLS):
-            _style(sum_tr, col, bold=True, bg=BLUE, fg=WHITE)
-
         # ── auto-fit all used columns ─────────────────────────────────────
         for col in range(max(PM_COLS, SUM_COLS)):
             sheet.Columns.getByIndex(col).OptimalWidth = True
@@ -425,7 +425,7 @@ def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
         area = uno.createUnoStruct('com.sun.star.table.CellRangeAddress')
         area.Sheet = 0
         area.StartColumn, area.EndColumn = 0, PM_COLS - 1
-        area.StartRow,    area.EndRow    = 0, sum_tr
+        area.StartRow,    area.EndRow    = 0, pm_tr
         sheet.setPrintAreas((area,))
 
         # ── export ────────────────────────────────────────────────────────
