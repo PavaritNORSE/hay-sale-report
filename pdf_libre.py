@@ -261,10 +261,45 @@ def _last_used_row_col_I(sheet):
     return 0
 
 
-def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, report_date, outdir):
-    """Create a one-page summary PDF: all branches × (Orders, Sales Closed,
-    Cash Received, AR) in a single table.  Saved as Summary_DD-MMM-YYYY.pdf
-    in outdir.  Returns the path on success, None on failure."""
+_PAYMENT_METHODS = [
+    'Alipay (KBANK)',
+    'Bank Transfer (KBANK)',
+    'Bank Transfer (SCB)',
+    'Beam (KBANK)',
+    'Credit Card (KBANK)',
+    'Credit Card (SCB)',
+    'WeChat Pay (KBANK)',
+]
+
+def _read_pay_method_sums(doc, date_str):
+    """Returns {branch: {method: amount}} from Cash Received sheet col I (PayMethod)."""
+    cr = doc.Sheets.getByName('Cash Received')
+    cur = cr.createCursor()
+    cur.gotoEndOfUsedArea(False)
+    end_row = cur.RangeAddress.EndRow
+    if end_row < 4:
+        return {}
+    data = cr.getCellRangeByPosition(1, 4, 12, end_row).getDataArray()
+    result = {}
+    for row in data:
+        if row[0] != date_str:          # col B = date
+            continue
+        branch = row[3]                 # col E = branch
+        method = row[7]                 # col I = PayMethod
+        amount = row[11]                # col M = amount
+        if not isinstance(amount, (int, float)):
+            continue
+        b = result.setdefault(branch, {})
+        b[method] = b.get(method, 0.0) + amount
+    return result
+
+
+def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
+                           report_date, outdir):
+    """Create a one-page summary PDF with two tables:
+    1. Payment method breakdown (branch × method)
+    2. Branch totals (Orders / Sales Closed / Cash Received / AR)
+    Saved as Summary_DD-MMM-YYYY.pdf in outdir."""
     date_str = report_date.strftime('%d-%b-%Y')
     sdoc = None
     try:
@@ -279,80 +314,130 @@ def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, report_date, ou
         if num_key == -1:
             num_key = fmts.addNew('#,##0', locale)
 
-        # ── helpers ───────────────────────────────────────────────────────
+        BLUE, WHITE = 0x2F5496, 0xFFFFFF
+        GRAY        = 0xD9E1F2
+
         def _c(r, c):
             return sheet.getCellByPosition(c, r)
 
         def _style(r, c, bold=False, bg=None, fg=None, height=None):
             cell = _c(r, c)
-            if bold:   cell.CharWeight = 150      # BOLD
-            if bg is not None: cell.CellBackColor = bg
-            if fg is not None: cell.CharColor = fg
-            if height:  cell.CharHeight = height
+            if bold:        cell.CharWeight = 150
+            if bg is not None:  cell.CellBackColor = bg
+            if fg is not None:  cell.CharColor = fg
+            if height:      cell.CharHeight = height
+
+        n_pm  = len(_PAYMENT_METHODS)
+        n_br  = len(DAILY_BRANCHES)
+        PM_COLS = n_pm + 2   # Branch + methods + Total (cols 0..n_pm+1)
 
         # ── title (row 0) ─────────────────────────────────────────────────
         _c(0, 0).setString(f'Daily Sales Summary  —  {date_str}')
         _style(0, 0, bold=True, height=13)
 
-        # ── column headers (row 2) ────────────────────────────────────────
-        BLUE, WHITE = 0x2F5496, 0xFFFFFF
-        GRAY        = 0xD9E1F2   # alternating row tint
-        headers = ['Branch', 'Orders', 'Sales Closed', 'Cash Received', 'AR']
-        for col, h in enumerate(headers):
-            _c(2, col).setString(h)
-            _style(2, col, bold=True, bg=BLUE, fg=WHITE)
+        # ═══════════════════════════════════════════════════════════════════
+        # TABLE 1 — Payment method breakdown
+        # Row 2: header, rows 3..3+n_br-1: branches, row 3+n_br: TOTAL
+        # ═══════════════════════════════════════════════════════════════════
+        PM_HDR = 2
+        pm_headers = ['Branch'] + _PAYMENT_METHODS + ['Total']
+        for col, h in enumerate(pm_headers):
+            _c(PM_HDR, col).setString(h)
+            _style(PM_HDR, col, bold=True, bg=BLUE, fg=WHITE)
 
-        # ── column widths (1/100 mm) ──────────────────────────────────────
-        for col, w in enumerate([4500, 2200, 3800, 3800, 3200]):
-            sheet.Columns.getByIndex(col).Width = w
+        pm_method_totals = {m: 0.0 for m in _PAYMENT_METHODS}
+        pm_grand_total = 0.0
 
-        # ── data rows (rows 3-9) ──────────────────────────────────────────
+        for i, branch in enumerate(DAILY_BRANCHES):
+            r = PM_HDR + 1 + i
+            _c(r, 0).setString(branch)
+            row_total = 0.0
+            b_pay = pay_sums.get(branch, {})
+            for j, m in enumerate(_PAYMENT_METHODS):
+                v = b_pay.get(m, 0.0)
+                cell = _c(r, j + 1)
+                cell.setValue(v)
+                cell.NumberFormat = num_key
+                row_total += v
+                pm_method_totals[m] += v
+            total_cell = _c(r, n_pm + 1)
+            total_cell.setValue(row_total)
+            total_cell.NumberFormat = num_key
+            pm_grand_total += row_total
+            if i % 2 == 1:
+                for col in range(PM_COLS):
+                    _c(r, col).CellBackColor = GRAY
+
+        pm_tr = PM_HDR + 1 + n_br
+        _c(pm_tr, 0).setString('TOTAL')
+        for j, m in enumerate(_PAYMENT_METHODS):
+            cell = _c(pm_tr, j + 1)
+            cell.setValue(pm_method_totals[m])
+            cell.NumberFormat = num_key
+        grand_cell = _c(pm_tr, n_pm + 1)
+        grand_cell.setValue(pm_grand_total)
+        grand_cell.NumberFormat = num_key
+        for col in range(PM_COLS):
+            _style(pm_tr, col, bold=True, bg=BLUE, fg=WHITE)
+
+        # ═══════════════════════════════════════════════════════════════════
+        # TABLE 2 — Branch summary (Orders / Sales Closed / CR / AR)
+        # Starts 2 rows below table 1
+        # ═══════════════════════════════════════════════════════════════════
+        SUM_HDR = pm_tr + 2
+        sum_headers = ['Branch', 'Orders', 'Sales Closed', 'Cash Received', 'AR']
+        for col, h in enumerate(sum_headers):
+            _c(SUM_HDR, col).setString(h)
+            _style(SUM_HDR, col, bold=True, bg=BLUE, fg=WHITE)
+
         total_orders = 0
         total_asc = total_cr = total_ar = 0.0
 
         for i, branch in enumerate(DAILY_BRANCHES):
-            r      = 3 + i
+            r = SUM_HDR + 1 + i
             orders = len(by_branch.get(branch, []))
             asc, ar = ytd_sums.get(branch, (0.0, 0.0))
-            cr     = cr_sums.get(branch, 0.0)
-
+            cr = cr_sums.get(branch, 0.0)
             _c(r, 0).setString(branch)
             for col, v in enumerate([orders, asc, cr, ar], 1):
                 cell = _c(r, col)
                 cell.setValue(v)
                 cell.NumberFormat = num_key
-
-            if i % 2 == 1:                        # alternating tint
+            if i % 2 == 1:
                 for col in range(5):
                     _c(r, col).CellBackColor = GRAY
-
             total_orders += orders
             total_asc    += asc
             total_cr     += cr
             total_ar     += ar
 
-        # ── total row ─────────────────────────────────────────────────────
-        tr = 3 + len(DAILY_BRANCHES)
-        _c(tr, 0).setString('TOTAL')
+        sum_tr = SUM_HDR + 1 + n_br
+        _c(sum_tr, 0).setString('TOTAL')
         for col, v in enumerate([total_orders, total_asc, total_cr, total_ar], 1):
-            cell = _c(tr, col)
+            cell = _c(sum_tr, col)
             cell.setValue(v)
             cell.NumberFormat = num_key
         for col in range(5):
-            _style(tr, col, bold=True, bg=BLUE, fg=WHITE)
+            _style(sum_tr, col, bold=True, bg=BLUE, fg=WHITE)
 
-        # ── page setup: fit to 1 page, portrait ──────────────────────────
+        # ── column widths ─────────────────────────────────────────────────
+        sheet.Columns.getByIndex(0).Width = 4500   # Branch
+        for col in range(1, n_pm + 2):              # method cols + Total
+            sheet.Columns.getByIndex(col).Width = 3000
+
+        # ── page setup: landscape, fit to 1 page ─────────────────────────
         ps = sdoc.StyleFamilies.getByName('PageStyles').getByName(sheet.PageStyle)
+        ps.IsLandscape = True
         ps.ScaleToPagesX = 1
         ps.ScaleToPagesY = 1
-        ps.LeftMargin = ps.RightMargin = ps.TopMargin = ps.BottomMargin = 1000
+        ps.LeftMargin = ps.RightMargin = ps.TopMargin = ps.BottomMargin = 800
         ps.HeaderIsOn = False
         ps.FooterIsOn = False
 
         area = uno.createUnoStruct('com.sun.star.table.CellRangeAddress')
         area.Sheet      = 0
-        area.StartColumn, area.EndColumn = 0, 4
-        area.StartRow,    area.EndRow    = 0, tr
+        area.StartColumn, area.EndColumn = 0, max(PM_COLS - 1, 4)
+        area.StartRow,    area.EndRow    = 0, sum_tr
         sheet.setPrintAreas((area,))
 
         # ── export ────────────────────────────────────────────────────────
@@ -443,6 +528,7 @@ def generate(xlsm_path, report_date, outdir):
         # (see the note above _YTD_SRC_COLS for why).
         by_branch, ytd_sums = _read_ytd_rows(doc, date_str)
         cr_sums = _read_cr_sums(doc, date_str)
+        pay_sums = _read_pay_method_sums(doc, date_str)
         _clear_detail_area(sheet, 500)     # wipe formulas + any stale cache
         prev_rows = 1
 
@@ -506,7 +592,7 @@ def generate(xlsm_path, report_date, outdir):
             exit_code = 1
 
         _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums,
-                               report_date, outdir)
+                               pay_sums, report_date, outdir)
         return exit_code
 
     except TimeoutError as e:
