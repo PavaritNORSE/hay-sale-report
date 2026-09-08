@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sale Report</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #F2F5F9; --surface: #FFFFFF; --border: #DCE4ED;
+    --text-hi: #0D1B2A; --text-mid: #3A4D5E; --text-lo: #6B8BA4;
+    --accent: #3B82C4; --accent-dk: #2E6FAD;
+    --success: #1A7A52; --success-bg: #E6F5EE;
+    --error: #B83232; --error-bg: #FDEAEA;
+    --warn: #7A5A10; --warn-bg: #FDF3DC;
+    --admin: #5A3D8A; --admin-bg: #F2EDF9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #080F18; --surface: #101B27; --border: #1A2F45;
+      --text-hi: #E4EDF8; --text-mid: #8DAEC9; --text-lo: #4F6C85;
+      --accent: #5A9FD8; --accent-dk: #7ABAEA;
+      --success: #38B574; --success-bg: #08251A;
+      --error: #E06060; --error-bg: #280C0C;
+      --warn: #CDA030; --warn-bg: #261C06;
+      --admin: #9D78D8; --admin-bg: #160E25;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Sarabun', system-ui, sans-serif;
+    font-size: 15px; line-height: 1.6;
+    background: var(--bg); color: var(--text-hi);
+    min-height: 100vh; display: flex;
+    align-items: center; justify-content: center; padding: 24px 16px;
+  }
+  .wrap { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 30px; height: 30px; background: var(--text-hi);
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  }
+  .brand-name { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-lo); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .card-body { padding: 28px 28px 24px; }
+  .card-footer {
+    padding: 12px 28px; border-top: 1px solid var(--border);
+    background: var(--bg); display: flex; align-items: center; gap: 8px;
+  }
+  h1 { font-size: 20px; font-weight: 700; line-height: 1.3; margin-bottom: 3px; }
+  .subtitle { font-size: 13px; color: var(--text-lo); margin-bottom: 24px; }
+  .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
+  label { font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--text-mid); }
+  input[type="email"], input[type="password"], input[type="text"] {
+    font-family: inherit; font-size: 14px; padding: 9px 12px;
+    border: 1.5px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text-hi); outline: none;
+    transition: border-color .15s; width: 100%;
+  }
+  input:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--text-lo); }
+  input:disabled { opacity: .5; cursor: not-allowed; }
+  .radio-group { display: flex; gap: 16px; }
+  .radio-label { font-size: 14px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  input[type="radio"] { accent-color: var(--accent); }
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+  .btn-primary {
+    width: 100%; padding: 12px; font-family: inherit; font-size: 15px;
+    font-weight: 600; color: #fff; background: var(--accent);
+    border: none; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background .15s, transform .1s; margin-top: 22px;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-dk); }
+  .btn-primary:active:not(:disabled) { transform: scale(.98); }
+  .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-admin { background: none; border: none; font-family: inherit; font-size: 11.5px; color: var(--admin); cursor: pointer; padding: 0; opacity: .7; }
+  .btn-admin:hover { opacity: 1; text-decoration: underline; }
+  .admin-panel {
+    margin-top: 20px; padding: 16px; border-radius: 8px;
+    background: var(--admin-bg); display: none;
+    border: 1px solid color-mix(in srgb, var(--admin) 25%, transparent);
+  }
+  .admin-panel.open { display: block; }
+  .admin-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--admin); margin-bottom: 10px; }
+  .admin-row { display: flex; gap: 8px; align-items: flex-end; }
+  .admin-row .field { flex: 1; margin-bottom: 0; }
+  .btn-admin-save {
+    padding: 9px 16px; font-family: inherit; font-size: 13px; font-weight: 600;
+    color: #fff; background: var(--admin); border: none; border-radius: 7px;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .btn-admin-save:disabled { opacity: .4; cursor: not-allowed; }
+  .hint { font-size: 11.5px; color: var(--text-lo); margin-top: 5px; line-height: 1.5; }
+  .hint a { color: var(--accent); text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
+  .banner {
+    padding: 11px 14px; border-radius: 8px; font-size: 13.5px; line-height: 1.5;
+    display: flex; align-items: flex-start; gap: 10px; margin-top: 14px;
+  }
+  .banner.success { background: var(--success-bg); color: var(--success); }
+  .banner.error   { background: var(--error-bg);   color: var(--error); }
+  .banner.warn    { background: var(--warn-bg);     color: var(--warn); }
+  .banner [role="img"] { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
+  .banner strong { display: block; font-weight: 600; }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
+    border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .lock-ico { color: var(--text-lo); flex-shrink: 0; }
+  .footer-text { font-size: 11.5px; color: var(--text-lo); }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; opacity: .5; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="brand">
+    <div class="brand-mark">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <rect x="2" y="2" width="6" height="6" rx="1" fill="#F2F5F9"/>
+        <rect x="10" y="2" width="6" height="6" rx="1" fill="#F2F5F9" opacity=".45"/>
+        <rect x="2" y="10" width="6" height="6" rx="1" fill="#F2F5F9" opacity=".45"/>
+        <rect x="10" y="10" width="6" height="6" rx="1" fill="#3B82C4"/>
+      </svg>
+    </div>
+    <span class="brand-name">Norse Republics · Operations</span>
+  </header>
+
+  <div class="card">
+    <div class="card-body">
+      <h1>ขอ Sale Report</h1>
+      <p class="subtitle">ไฟล์ Excel จะถูกส่งไปยังอีเมลที่ระบุภายใน ~2 นาที</p>
+
+      <div id="no-pat-warn" style="display:none;" class="banner warn">
+        <span role="img" aria-label="warn">⚠️</span>
+        <div><strong>ยังไม่ได้ตั้งค่า Token</strong>กด ⚙ Admin ด้านล่างเพื่อตั้งค่าก่อน</div>
+      </div>
+
+      <div id="form-fields">
+        <div class="field" style="margin-top:4px;">
+          <label for="run-email">ส่งไฟล์ไปที่อีเมล</label>
+          <input type="email" id="run-email" placeholder="name@norserepublics.com">
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label>ข้อมูลของวัน</label>
+          <div class="radio-group">
+            <label class="radio-label"><input type="radio" name="dm" value="yesterday" checked> เมื่อวาน</label>
+            <label class="radio-label"><input type="radio" name="dm" value="today"> วันนี้</label>
+            <label class="radio-label"><input type="radio" name="dm" value="custom"> วันที่เอง</label>
+          </div>
+        </div>
+        <div class="field" id="custom-wrap" style="display:none; margin-top:-8px;">
+          <input type="text" id="custom-date" placeholder="YYYY-MM-DD เช่น 2026-09-08">
+        </div>
+
+        <button class="btn-primary" id="btn-run">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+          ขอรายงาน Excel
+        </button>
+        <div id="run-status"></div>
+      </div>
+
+      <div class="admin-panel" id="admin-panel">
+        <div class="admin-label">⚙ Admin — ตั้งค่า GitHub Token</div>
+        <div class="admin-row">
+          <div class="field">
+            <input type="password" id="admin-pat" placeholder="github_pat_…">
+          </div>
+          <button class="btn-admin-save" id="btn-save">บันทึก</button>
+        </div>
+        <p class="hint">
+          Fine-grained PAT: <strong>Actions → Read and write</strong> บน repo <code>hay-sale-report</code><br>
+          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">สร้างที่ GitHub → Settings → Fine-grained tokens</a>
+        </p>
+        <div id="admin-status"></div>
+      </div>
+    </div>
+
+    <div class="card-footer">
+      <svg class="lock-ico" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-1.5V4.5A3.5 3.5 0 0 0 8 1zm2.5 5H5.5V4.5a2.5 2.5 0 0 1 5 0V6z"/>
+      </svg>
+      <span class="footer-text">Norse Republics · Internal Tool</span>
+      <button class="btn-admin" id="btn-toggle" style="margin-left:auto;">⚙ Admin</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const REPO = 'PavaritNORSE/hay-sale-report';
+const WF   = 'daily-report.yml';
+const API  = `https://api.github.com/repos/${REPO}/actions/workflows/${WF}/dispatches`;
+const LS_PAT   = 'nr_pat';
+const LS_EMAIL = 'nr_email';
+
+function banner(el, type, title, body) {
+  const ic = {success:'✅',error:'❌',warn:'⚠️'};
+  el.innerHTML = `<div class="banner ${type}"><span role="img">${ic[type]}</span><div><strong>${title}</strong>${body||''}</div></div>`;
+}
+
+function refresh() {
+  const pat = localStorage.getItem(LS_PAT);
+  document.getElementById('no-pat-warn').style.display = pat ? 'none' : 'flex';
+  document.getElementById('btn-run').disabled = !pat;
+  document.getElementById('run-email').disabled = !pat;
+  document.querySelectorAll('input[name="dm"]').forEach(r => r.disabled = !pat);
+  const saved = localStorage.getItem(LS_EMAIL);
+  if (saved && !document.getElementById('run-email').value) document.getElementById('run-email').value = saved;
+}
+
+document.querySelectorAll('input[name="dm"]').forEach(r =>
+  r.addEventListener('change', () =>
+    document.getElementById('custom-wrap').style.display = (r.value==='custom'&&r.checked)?'flex':'none'
+  )
+);
+
+document.getElementById('btn-toggle').addEventListener('click', () =>
+  document.getElementById('admin-panel').classList.toggle('open')
+);
+
+document.getElementById('btn-save').addEventListener('click', async () => {
+  const pat = document.getElementById('admin-pat').value.trim();
+  const st  = document.getElementById('admin-status');
+  const btn = document.getElementById('btn-save');
+  st.innerHTML = '';
+  if (!pat) { banner(st,'warn','กรุณากรอก Token',''); return; }
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ…';
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WF}`,
+      {headers:{Authorization:'Bearer '+pat,Accept:'application/vnd.github+json'}});
+    if (r.status===401) { banner(st,'error','Token ไม่ถูกต้อง','ตรวจสอบและ Copy ใหม่'); return; }
+    if (r.status===404) { banner(st,'error','ไม่พบ Workflow','ตรวจสอบ scope ของ Token'); return; }
+    localStorage.setItem(LS_PAT, pat);
+    banner(st,'success','บันทึกแล้ว!','');
+    document.getElementById('admin-pat').value = '';
+    document.getElementById('admin-panel').classList.remove('open');
+    refresh();
+  } catch(e) {
+    banner(st,'error','เชื่อมต่อ GitHub ไม่ได้','ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต');
+  } finally { btn.disabled = false; btn.textContent = 'บันทึก'; }
+});
+
+document.getElementById('btn-run').addEventListener('click', async () => {
+  const email = document.getElementById('run-email').value.trim();
+  const st    = document.getElementById('run-status');
+  const btn   = document.getElementById('btn-run');
+  if (!email) { banner(st,'warn','กรุณาระบุอีเมล',''); return; }
+  const mode = document.querySelector('input[name="dm"]:checked').value;
+  let dateInput='', useToday='';
+  if (mode==='today') useToday='true';
+  else if (mode==='custom') {
+    dateInput = document.getElementById('custom-date').value.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) { banner(st,'warn','รูปแบบวันที่ไม่ถูกต้อง','ใช้ YYYY-MM-DD'); return; }
+  }
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> กำลังส่งคำขอ…';
+  st.innerHTML = '';
+  localStorage.setItem(LS_EMAIL, email);
+  const payload = {ref:'main',inputs:{recipients:email,format:'excel'}};
+  if (useToday) payload.inputs.use_today='true';
+  if (dateInput) payload.inputs.date=dateInput;
+  try {
+    const r = await fetch(API,{
+      method:'POST',
+      headers:{Authorization:'Bearer '+localStorage.getItem(LS_PAT),Accept:'application/vnd.github+json','Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    if (r.status===204) banner(st,'success','ส่งคำขอแล้ว!',`ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที`);
+    else if (r.status===401) banner(st,'error','Token หมดอายุ','กด ⚙ Admin เพื่ออัปเดต Token');
+    else banner(st,'error',`เกิดข้อผิดพลาด HTTP ${r.status}`,'ลองอีกครั้งหรือติดต่อ IT');
+  } catch { banner(st,'error','เชื่อมต่อ GitHub ไม่ได้','ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg> ขอรายงาน Excel';
+  }
+});
+
+refresh();
+</script>
+</body>
+</html>
