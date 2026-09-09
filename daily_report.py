@@ -1214,8 +1214,9 @@ def _odoo_export(models, model, domain, fields, order_by=None):
                                model, 'export_data', [ids, fields], {})
     return result.get('datas', [])
 
-def fetch_odoo_all(year=ODOO_YEAR):
+def fetch_odoo_all(year=ODOO_YEAR, date_from=None, date_to=None):
     """ดึงข้อมูลครบ 5 ชุดจาก Odoo API ผ่าน XML-RPC (parallelized).
+    date_from/date_to (YYYY-MM-DD): ถ้าส่งมา ใช้แทน year range (รองรับ cross-year)
     Returns: (so_raw, pos_raw, cn_raw, sopay_raw, pospay_raw) แต่ละตัวเป็น
     list-of-lists [header_row, data_row1, data_row2, ...] เหมือน read_xlsx()
 
@@ -1245,7 +1246,15 @@ def fetch_odoo_all(year=ODOO_YEAR):
     from io import BytesIO
     from concurrent.futures import ThreadPoolExecutor
 
-    pos_start, pos_end = pos_utc_range(year)
+    if date_from and date_to:
+        _df = datetime.strptime(date_from, '%Y-%m-%d')
+        _dt = datetime.strptime(date_to, '%Y-%m-%d')
+        pos_start = datetime(_df.year, _df.month, _df.day, 0, 0, 0, tzinfo=TZ_BKK).astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        pos_end   = datetime(_dt.year, _dt.month, _dt.day, 23, 59, 59, tzinfo=TZ_BKK).astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        _d_from, _d_to = date_from, date_to
+    else:
+        pos_start, pos_end = pos_utc_range(year)
+        _d_from, _d_to = f'{year}-01-01', f'{year}-12-31'
     print(f"  POS UTC range (TH UTC+7): {pos_start} → {pos_end}")
 
     class _KeepAliveSafeTransport(xmlrpc.client.SafeTransport):
@@ -1360,8 +1369,8 @@ def fetch_odoo_all(year=ODOO_YEAR):
     ]
     so_domain = [
         ['state', 'in', ['sale', 'done']],
-        ['x_studio_actual_order_date', '>=', f'{year}-01-01'],
-        ['x_studio_actual_order_date', '<=', f'{year}-12-31'],
+        ['x_studio_actual_order_date', '>=', _d_from],
+        ['x_studio_actual_order_date', '<=', _d_to],
         ['source_id', 'not ilike', 'consignment'],
         ['tag_ids', 'not ilike', 'foc'],
         ['tag_ids', 'not ilike', 'gift'],
@@ -1440,8 +1449,8 @@ def fetch_odoo_all(year=ODOO_YEAR):
     cn_domain = [
         ['move_type', '=', 'out_refund'],
         ['state', '=', 'posted'],
-        ['invoice_date', '>=', f'{year}-01-01'],
-        ['invoice_date', '<=', f'{year}-12-31'],
+        ['invoice_date', '>=', _d_from],
+        ['invoice_date', '<=', _d_to],
         ['invoice_origin', 'not ilike', 'refund'],
         ['source_id', 'not ilike', 'consignment'],
     ]
@@ -1466,8 +1475,8 @@ def fetch_odoo_all(year=ODOO_YEAR):
         ['partner_type', '=', 'customer'],
         ['is_internal_transfer', '=', False],
         ['state', '=', 'posted'],
-        ['date', '>=', f'{year}-01-01'],
-        ['date', '<=', f'{year}-12-31'],
+        ['date', '>=', _d_from],
+        ['date', '<=', _d_to],
         ['create_uid', 'not ilike', 'norse x'],
     ]
     # SO Payment fetch submitted below
@@ -1491,8 +1500,8 @@ def fetch_odoo_all(year=ODOO_YEAR):
         ['partner_type', '=', 'customer'],
         ['is_internal_transfer', '=', False],
         ['state', '=', 'posted'],
-        ['date', '>=', f'{year}-01-01'],
-        ['date', '<=', f'{year}-12-31'],
+        ['date', '>=', _d_from],
+        ['date', '<=', _d_to],
         ['source_id', 'not ilike', 'consignment'],
     ]
     # POS Payment fetch submitted below
@@ -1603,25 +1612,18 @@ def main():
     # ── Fetch / Read data ────────────────────────────────────────────────────
     if args.fetch_odoo:
         if args.last13:
+            import calendar
             today_bkk = datetime.now(TZ_BKK)
-            yr_end = today_bkk.year
-            yr_start = (today_bkk.replace(year=today_bkk.year - 1)).year
-            years = sorted(set([yr_start, yr_end]))
-            print(f"Fetching from Odoo API (last 13 months: {years})...")
-            def _merge(r1, r2):
-                return r1 + r2[1:] if len(r2) > 1 else r1
-            datasets = [fetch_odoo_all(y) for y in years]
-            so_raw   = datasets[0][0]
-            pos_raw  = datasets[0][1]
-            cn_raw   = datasets[0][2]
-            sopay_raw  = datasets[0][3]
-            pospay_raw = datasets[0][4]
-            for ds in datasets[1:]:
-                so_raw     = _merge(so_raw,     ds[0])
-                pos_raw    = _merge(pos_raw,    ds[1])
-                cn_raw     = _merge(cn_raw,     ds[2])
-                sopay_raw  = _merge(sopay_raw,  ds[3])
-                pospay_raw = _merge(pospay_raw, ds[4])
+            d_to = today_bkk.strftime('%Y-%m-%d')
+            m13 = today_bkk.month - 13
+            y13 = today_bkk.year
+            while m13 <= 0:
+                m13 += 12
+                y13 -= 1
+            max_day = calendar.monthrange(y13, m13)[1]
+            d_from = f'{y13}-{m13:02d}-{min(today_bkk.day, max_day):02d}'
+            print(f"Fetching from Odoo API (last 13 months: {d_from} → {d_to})...")
+            so_raw, pos_raw, cn_raw, sopay_raw, pospay_raw = fetch_odoo_all(date_from=d_from, date_to=d_to)
         else:
             print(f"Fetching from Odoo API (year={args.year})...")
             so_raw, pos_raw, cn_raw, sopay_raw, pospay_raw = fetch_odoo_all(args.year)
