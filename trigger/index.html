@@ -58,6 +58,23 @@
     transition: border-color .15s; width: 100%;
   }
   input:focus { border-color: var(--accent); }
+  .email-wrap {
+    display: flex; align-items: center;
+    border: 1.5px solid var(--border); border-radius: 7px;
+    background: var(--bg); transition: border-color .15s;
+    overflow: hidden;
+  }
+  .email-wrap:focus-within { border-color: var(--accent); }
+  .email-wrap input {
+    border: none; border-radius: 0; background: transparent;
+    flex: 1; min-width: 0; padding: 9px 8px 9px 12px;
+  }
+  .email-wrap input:focus { border-color: transparent; }
+  .email-suffix {
+    padding: 9px 12px 9px 4px; font-size: 14px;
+    color: var(--text-lo); white-space: nowrap; flex-shrink: 0;
+    user-select: none;
+  }
   input::placeholder { color: var(--text-lo); }
   input:disabled { opacity: .5; cursor: not-allowed; }
   .radio-group { display: flex; gap: 16px; }
@@ -142,7 +159,10 @@
       <div id="form-fields">
         <div class="field" style="margin-top:4px;">
           <label for="run-email">ส่งไฟล์ไปที่อีเมล</label>
-          <input type="email" id="run-email" placeholder="name@norserepublics.com">
+          <div class="email-wrap">
+            <input type="text" id="run-email" placeholder="ชื่อ" autocomplete="username">
+            <span class="email-suffix">@norserepublics.com</span>
+          </div>
         </div>
 
         <div class="divider"></div>
@@ -194,14 +214,14 @@ document.querySelectorAll('input[name="dm"]').forEach(r =>
 );
 
 const saved = localStorage.getItem(LS_EMAIL);
-if (saved) document.getElementById('run-email').value = saved;
+if (saved) document.getElementById('run-email').value = saved.replace('@norserepublics.com','');
 
 document.getElementById('btn-run').addEventListener('click', async () => {
-  const email = document.getElementById('run-email').value.trim();
+  const emailUser = document.getElementById('run-email').value.trim();
+  const email = emailUser ? emailUser + '@norserepublics.com' : '';
   const st    = document.getElementById('run-status');
   const btn   = document.getElementById('btn-run');
   if (!email) { banner(st,'warn','กรุณาระบุอีเมล',''); return; }
-  if (!email.endsWith('@norserepublics.com')) { banner(st,'warn','อีเมลไม่ถูกต้อง','ใช้ได้เฉพาะอีเมล @norserepublics.com เท่านั้น'); return; }
   const mode = document.querySelector('input[name="dm"]:checked').value;
   let dateInput='', useToday='';
   if (mode==='today') useToday='true';
