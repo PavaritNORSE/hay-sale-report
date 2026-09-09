@@ -255,6 +255,8 @@ document.getElementById('btn-run').addEventListener('click', async () => {
       banner(st,'warn','กรุณารอสักครู่',`ไฟล์กำลังถูกจัดส่ง สามารถขอใหม่ได้อีกครั้งในอีก ${mins} นาที`);
     } else if (j.error === 'daily_limit') {
       banner(st,'warn','กรุณารอสักครู่',j.detail);
+    } else if (j.error === 'user_not_found') {
+      banner(st,'error','ไม่พบอีเมลนี้ในระบบ','กรุณาตรวจสอบชื่ออีเมลอีกครั้ง หากยังมีปัญหาติดต่อ IT');
     } else {
       banner(st,'error','เกิดข้อผิดพลาด',j.detail || 'ลองอีกครั้งหรือติดต่อ IT');
     }
