@@ -95,14 +95,24 @@
   .hint a { color: var(--accent); text-decoration: none; }
   .hint a:hover { text-decoration: underline; }
   .banner {
-    padding: 11px 14px; border-radius: 8px; font-size: 13.5px; line-height: 1.5;
-    display: flex; align-items: flex-start; gap: 10px; margin-top: 14px;
+    padding: 14px 16px; border-radius: 8px; font-size: 14px; line-height: 1.6;
+    display: flex; align-items: flex-start; gap: 12px; margin-top: 16px;
+    border-left: 4px solid; box-shadow: 0 2px 8px rgba(0,0,0,.15);
   }
-  .banner.success { background: var(--success-bg); color: var(--success); }
-  .banner.error   { background: var(--error-bg);   color: var(--error); }
-  .banner.warn    { background: var(--warn-bg);     color: var(--warn); }
-  .banner [role="img"] { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
-  .banner strong { display: block; font-weight: 600; }
+  .banner.success { background: var(--success-bg); color: var(--success); border-color: var(--success); }
+  .banner.error   { background: var(--error-bg);   color: var(--error);   border-color: var(--error); }
+  .banner.warn    { background: var(--warn-bg);     color: var(--warn);    border-color: var(--warn); }
+  .banner [role="img"] { flex-shrink: 0; font-size: 18px; margin-top: 1px; }
+  .banner strong { display: block; font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+  .quota-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 10px; padding: 8px 14px; border-radius: 20px;
+    font-size: 13px; font-weight: 700; letter-spacing: .02em;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent); border: 1.5px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  .quota-badge.low { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+  .quota-badge.empty { background: color-mix(in srgb, var(--error) 15%, transparent); color: var(--error); border-color: color-mix(in srgb, var(--error) 40%, transparent); }
   .spinner {
     width: 16px; height: 16px;
     border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
@@ -209,8 +219,13 @@ document.getElementById('btn-run').addEventListener('click', async () => {
     const r = await fetch(WORKER, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const j = await r.json();
     if (j.ok) {
-      const rem = j.remaining > 0 ? ` (เหลืออีก ${j.remaining} ครั้งวันนี้)` : ' (ครบโควต้าวันนี้แล้ว)';
-      banner(st,'success','ส่งคำขอแล้ว!',`ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที${rem}`);
+      const rem = j.remaining;
+      const badgeClass = rem === 0 ? 'empty' : rem === 1 ? 'low' : '';
+      const badgeIcon = rem === 0 ? '🚫' : rem === 1 ? '⚠️' : '✅';
+      const badgeText = rem === 0 ? 'ใช้ครบโควต้าวันนี้แล้ว' : `เหลืออีก ${rem} ครั้งวันนี้`;
+      banner(st,'success','ส่งคำขอแล้ว!',
+        `ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที` +
+        `<div class="quota-badge ${badgeClass}" style="margin-top:10px;">${badgeIcon} ${badgeText}</div>`);
     } else if (j.error === 'cooldown' || j.error === 'daily_limit') {
       banner(st,'warn','ไม่สามารถส่งได้',j.detail);
     } else {
