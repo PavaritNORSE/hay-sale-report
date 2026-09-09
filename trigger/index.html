@@ -220,6 +220,8 @@ document.getElementById('btn-run').addEventListener('click', async () => {
     const r = await fetch(WORKER, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const j = await r.json();
     if (j.ok) {
+      btn.disabled = true;
+      btn.innerHTML = '✅ ส่งแล้ว — กรุณารอ 2 นาที';
       const rem = j.remaining;
       const isUnlimited = rem < 0;
       const badgeClass = isUnlimited ? '' : rem === 0 ? 'empty' : rem === 1 ? 'low' : '';
