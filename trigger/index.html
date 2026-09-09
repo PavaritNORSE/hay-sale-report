@@ -225,7 +225,7 @@ document.getElementById('btn-run').addEventListener('click', async () => {
       const badgeText = rem === 0 ? 'ใช้ครบโควต้าวันนี้แล้ว' : `เหลืออีก ${rem} ครั้งวันนี้`;
       banner(st,'success','ส่งคำขอแล้ว!',
         `ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที` +
-        `<div class="quota-badge ${badgeClass}">${badgeIcon} ${badgeText}</div>`);
+        `<br><div class="quota-badge ${badgeClass}">${badgeIcon} ${badgeText}</div>`);
     } else if (j.error === 'cooldown') {
       const mins = (j.detail.match(/\d+/) || [''])[0];
       banner(st,'warn','กรุณารอสักครู่',`ไฟล์กำลังถูกจัดส่ง สามารถขอใหม่ได้อีกครั้งในอีก ${mins} นาที`);
