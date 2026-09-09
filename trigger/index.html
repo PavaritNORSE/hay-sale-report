@@ -211,16 +211,17 @@ function banner(el, type, title, body) {
 (function() {
   const sel = document.getElementById('custom-year');
   const curYear = new Date().getFullYear();
-  const l13 = document.createElement('option');
-  l13.value = 'last13';
-  l13.textContent = '13 เดือนย้อนหลัง';
-  sel.appendChild(l13);
   for (let y = curYear; y >= 2024; y--) {
     const opt = document.createElement('option');
     opt.value = y;
     opt.textContent = y;
+    if (y === curYear) opt.selected = true;
     sel.appendChild(opt);
   }
+  const l13 = document.createElement('option');
+  l13.value = 'last13';
+  l13.textContent = '13 เดือนย้อนหลัง';
+  sel.appendChild(l13);
 })();
 
 const saved = localStorage.getItem(LS_EMAIL);
