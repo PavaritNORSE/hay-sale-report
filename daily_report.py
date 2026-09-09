@@ -1734,7 +1734,7 @@ def main():
     # ── Excel-only mode (on-demand request from Odoo) ────────────────────────
     if args.excel_only:
         try:
-            send_excel_email(XLSM, report_date=report_date)
+            send_excel_email(XLSM, report_date=report_date, year=args.year)
         except Exception as e:
             print(f'\n[EMAIL] ERROR: {e}')
             traceback.print_exc()
@@ -1921,14 +1921,14 @@ def send_daily_email(pdf_paths, missing_branches=None, report_date=None):
     print(f"[EMAIL]  ✓ Sent successfully")
 
 
-def send_excel_email(xlsm_path, report_date=None):
+def send_excel_email(xlsm_path, report_date=None, year=None):
     """Email the patched XLSM file as an on-demand report (skip PDF generation).
     Used when --excel-only is passed (triggered from Odoo Server Action).
     """
     today    = report_date or datetime.now(TZ_BKK)
-    date_str = today.strftime('%d-%b-%Y')
-    fname    = f'SaleReport_{date_str}.xlsm'
-    subject  = f'Sale Report (Excel) {today.day} {today.strftime("%b")} {today.year}'
+    yr       = year or today.year
+    fname    = f'Sale Report {yr}.xlsm'
+    subject  = f'Sale Report (Excel) {yr}'
     body_text = '\n'.join([
         'Dear All,',
         '',

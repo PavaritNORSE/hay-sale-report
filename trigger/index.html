@@ -175,14 +175,7 @@
         <div class="divider"></div>
 
         <div class="field">
-          <label>ข้อมูลของวัน</label>
-          <div class="radio-group">
-            <label class="radio-label"><input type="radio" name="dm" value="yesterday" checked> เมื่อวาน</label>
-            <label class="radio-label"><input type="radio" name="dm" value="today"> วันนี้</label>
-            <label class="radio-label"><input type="radio" name="dm" value="year"> ระบุปี</label>
-          </div>
-        </div>
-        <div class="field" id="year-wrap" style="display:none; margin-top:-8px;">
+          <label for="custom-year">ข้อมูลปี</label>
           <select id="custom-year"></select>
         </div>
 
@@ -226,12 +219,6 @@ function banner(el, type, title, body) {
   }
 })();
 
-document.querySelectorAll('input[name="dm"]').forEach(r =>
-  r.addEventListener('change', () =>
-    document.getElementById('year-wrap').style.display = (r.value==='year'&&r.checked)?'block':'none'
-  )
-);
-
 const saved = localStorage.getItem(LS_EMAIL);
 if (saved) document.getElementById('run-email').value = saved.replace('@norserepublics.com','');
 
@@ -241,17 +228,12 @@ document.getElementById('btn-run').addEventListener('click', async () => {
   const st    = document.getElementById('run-status');
   const btn   = document.getElementById('btn-run');
   if (!email) { banner(st,'warn','กรุณาระบุอีเมล',''); return; }
-  const mode = document.querySelector('input[name="dm"]:checked').value;
-  let useToday='', yearInput='';
-  if (mode==='today') useToday='true';
-  else if (mode==='year') yearInput = document.getElementById('custom-year').value;
+  const yearInput = document.getElementById('custom-year').value;
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> กำลังส่งคำขอ…';
   st.innerHTML = '';
   localStorage.setItem(LS_EMAIL, email);
-  const payload = { recipients: email, format: 'excel' };
-  if (useToday) payload.use_today = 'true';
-  if (yearInput) payload.year = yearInput;
+  const payload = { recipients: email, format: 'excel', year: yearInput };
   try {
     const r = await fetch(WORKER, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const j = await r.json();
