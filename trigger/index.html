@@ -80,6 +80,13 @@
   .radio-group { display: flex; gap: 16px; }
   .radio-label { font-size: 14px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
   input[type="radio"] { accent-color: var(--accent); }
+  select {
+    font-family: inherit; font-size: 14px; padding: 9px 12px;
+    border: 1.5px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text-hi); outline: none;
+    transition: border-color .15s; cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
   .divider { height: 1px; background: var(--border); margin: 20px 0; }
   .btn-primary {
     width: 100%; padding: 12px; font-family: inherit; font-size: 15px;
@@ -172,11 +179,11 @@
           <div class="radio-group">
             <label class="radio-label"><input type="radio" name="dm" value="yesterday" checked> เมื่อวาน</label>
             <label class="radio-label"><input type="radio" name="dm" value="today"> วันนี้</label>
-            <label class="radio-label"><input type="radio" name="dm" value="custom"> ระบุวันที่</label>
+            <label class="radio-label"><input type="radio" name="dm" value="year"> ระบุปี</label>
           </div>
         </div>
-        <div class="field" id="custom-wrap" style="display:none; margin-top:-8px;">
-          <input type="text" id="custom-date" placeholder="YYYY-MM-DD เช่น 2026-09-08">
+        <div class="field" id="year-wrap" style="display:none; margin-top:-8px;">
+          <select id="custom-year"></select>
         </div>
 
         <button class="btn-primary" id="btn-run">
@@ -207,9 +214,21 @@ function banner(el, type, title, body) {
   el.innerHTML = `<div class="banner ${type}"><span role="img">${ic[type]}</span><div><strong>${title}</strong>${body||''}</div></div>`;
 }
 
+// Populate year dropdown: current year down to 2024
+(function() {
+  const sel = document.getElementById('custom-year');
+  const curYear = new Date().getFullYear();
+  for (let y = curYear; y >= 2024; y--) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y;
+    sel.appendChild(opt);
+  }
+})();
+
 document.querySelectorAll('input[name="dm"]').forEach(r =>
   r.addEventListener('change', () =>
-    document.getElementById('custom-wrap').style.display = (r.value==='custom'&&r.checked)?'flex':'none'
+    document.getElementById('year-wrap').style.display = (r.value==='year'&&r.checked)?'block':'none'
   )
 );
 
@@ -223,19 +242,16 @@ document.getElementById('btn-run').addEventListener('click', async () => {
   const btn   = document.getElementById('btn-run');
   if (!email) { banner(st,'warn','กรุณาระบุอีเมล',''); return; }
   const mode = document.querySelector('input[name="dm"]:checked').value;
-  let dateInput='', useToday='';
+  let useToday='', yearInput='';
   if (mode==='today') useToday='true';
-  else if (mode==='custom') {
-    dateInput = document.getElementById('custom-date').value.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) { banner(st,'warn','รูปแบบวันที่ไม่ถูกต้อง','ใช้ YYYY-MM-DD'); return; }
-  }
+  else if (mode==='year') yearInput = document.getElementById('custom-year').value;
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> กำลังส่งคำขอ…';
   st.innerHTML = '';
   localStorage.setItem(LS_EMAIL, email);
   const payload = { recipients: email, format: 'excel' };
   if (useToday) payload.use_today = 'true';
-  if (dateInput) payload.date = dateInput;
+  if (yearInput) payload.year = yearInput;
   try {
     const r = await fetch(WORKER, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const j = await r.json();

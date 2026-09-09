@@ -37,6 +37,10 @@ on:
         description: 'excel = email raw XLSM file (on-demand); leave blank = PDF (default)'
         required: false
         default: ''
+      year:
+        description: 'Fetch Odoo data for this year (e.g. 2025). Leave blank = current year (2026).'
+        required: false
+        default: ''
 
 # Each recipients-group runs independently so the 6 AM and noon jobs
 # never block each other.
@@ -117,13 +121,17 @@ jobs:
           if [ "${{ inputs.format }}" = "excel" ]; then
             EXTRA_ARGS="--excel-only"
           fi
+          YEAR_ARG=""
+          if [ -n "${{ inputs.year }}" ]; then
+            YEAR_ARG="--year ${{ inputs.year }}"
+          fi
           if [ -n "${{ inputs.date }}" ]; then
-            python3 daily_report.py --fetch-odoo --date "${{ inputs.date }}" $EXTRA_ARGS
+            python3 daily_report.py --fetch-odoo --date "${{ inputs.date }}" $YEAR_ARG $EXTRA_ARGS
           elif [ "${{ inputs.use_today }}" = "true" ]; then
             TODAY=$(TZ=Asia/Bangkok date +%Y-%m-%d)
-            python3 daily_report.py --fetch-odoo --date "$TODAY" $EXTRA_ARGS
+            python3 daily_report.py --fetch-odoo --date "$TODAY" $YEAR_ARG $EXTRA_ARGS
           else
-            python3 daily_report.py --fetch-odoo $EXTRA_ARGS
+            python3 daily_report.py --fetch-odoo $YEAR_ARG $EXTRA_ARGS
           fi
 
       - name: Upload PDFs as artifact
