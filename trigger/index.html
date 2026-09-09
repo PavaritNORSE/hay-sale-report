@@ -223,7 +223,7 @@ document.getElementById('btn-run').addEventListener('click', async () => {
       const isUnlimited = rem < 0;
       const badgeClass = isUnlimited ? '' : rem === 0 ? 'empty' : rem === 1 ? 'low' : '';
       const badgeIcon = isUnlimited ? '🔓' : rem === 0 ? '🚫' : rem === 1 ? '⚠️' : '✅';
-      const badgeText = isUnlimited ? 'ไม่จำกัดจำนวนครั้ง (Admin)' : rem === 0 ? 'ใช้ครบสิทธิ์สำหรับวันนี้แล้ว' : `คงเหลือ ${rem} ครั้ง (สูงสุด 3 ครั้งต่อวัน)`;
+      const badgeText = isUnlimited ? 'ไม่จำกัดจำนวนครั้ง (Admin)' : rem === 0 ? 'ใช้ครบสิทธิ์สำหรับวันนี้แล้ว' : `คงเหลือ ${rem} ครั้ง (สูงสุด 10 ครั้งต่อวัน)`;
       banner(st,'success','ส่งคำขอแล้ว!',
         `ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที` +
         `<br><div class="quota-badge ${badgeClass}">${badgeIcon} ${badgeText}</div>`);
