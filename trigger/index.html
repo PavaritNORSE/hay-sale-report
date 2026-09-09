@@ -226,8 +226,11 @@ document.getElementById('btn-run').addEventListener('click', async () => {
       banner(st,'success','ส่งคำขอแล้ว!',
         `ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที` +
         `<div class="quota-badge ${badgeClass}" style="margin-top:10px;">${badgeIcon} ${badgeText}</div>`);
-    } else if (j.error === 'cooldown' || j.error === 'daily_limit') {
-      banner(st,'warn','ไม่สามารถส่งได้',j.detail);
+    } else if (j.error === 'cooldown') {
+      const mins = (j.detail.match(/\d+/) || [''])[0];
+      banner(st,'warn','กรุณารอสักครู่',`ไฟล์กำลังถูกจัดส่ง สามารถขอใหม่ได้อีกครั้งในอีก ${mins} นาที`);
+    } else if (j.error === 'daily_limit') {
+      banner(st,'warn','กรุณารอสักครู่',j.detail);
     } else {
       banner(st,'error','เกิดข้อผิดพลาด',j.detail || 'ลองอีกครั้งหรือติดต่อ IT');
     }
