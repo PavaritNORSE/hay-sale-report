@@ -201,6 +201,7 @@ document.getElementById('btn-run').addEventListener('click', async () => {
   const st    = document.getElementById('run-status');
   const btn   = document.getElementById('btn-run');
   if (!email) { banner(st,'warn','กรุณาระบุอีเมล',''); return; }
+  if (!email.endsWith('@norserepublics.com')) { banner(st,'warn','อีเมลไม่ถูกต้อง','ใช้ได้เฉพาะอีเมล @norserepublics.com เท่านั้น'); return; }
   const mode = document.querySelector('input[name="dm"]:checked').value;
   let dateInput='', useToday='';
   if (mode==='today') useToday='true';
