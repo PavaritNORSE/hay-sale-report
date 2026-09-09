@@ -207,10 +207,14 @@ function banner(el, type, title, body) {
   el.innerHTML = `<div class="banner ${type}"><span role="img">${ic[type]}</span><div><strong>${title}</strong>${body||''}</div></div>`;
 }
 
-// Populate year dropdown: current year down to 2024
+// Populate year dropdown
 (function() {
   const sel = document.getElementById('custom-year');
   const curYear = new Date().getFullYear();
+  const l13 = document.createElement('option');
+  l13.value = 'last13';
+  l13.textContent = '13 เดือนย้อนหลัง';
+  sel.appendChild(l13);
   for (let y = curYear; y >= 2024; y--) {
     const opt = document.createElement('option');
     opt.value = y;
@@ -233,7 +237,9 @@ document.getElementById('btn-run').addEventListener('click', async () => {
   btn.innerHTML = '<div class="spinner"></div> กำลังส่งคำขอ…';
   st.innerHTML = '';
   localStorage.setItem(LS_EMAIL, email);
-  const payload = { recipients: email, format: 'excel', year: yearInput };
+  const payload = { recipients: email, format: 'excel' };
+  if (yearInput === 'last13') payload.last13 = 'true';
+  else payload.year = yearInput;
   try {
     const r = await fetch(WORKER, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const j = await r.json();

@@ -41,6 +41,10 @@ on:
         description: 'Fetch Odoo data for this year (e.g. 2025). Leave blank = current year (2026).'
         required: false
         default: ''
+      last13:
+        description: 'true = fetch last 13 months of data (spans 2 years if needed)'
+        required: false
+        default: ''
 
 # Each recipients-group runs independently so the 6 AM and noon jobs
 # never block each other.
@@ -125,7 +129,9 @@ jobs:
           if [ -n "${{ inputs.year }}" ]; then
             YEAR_ARG="--year ${{ inputs.year }}"
           fi
-          if [ -n "${{ inputs.date }}" ]; then
+          if [ "${{ inputs.last13 }}" = "true" ]; then
+            python3 daily_report.py --fetch-odoo --last13 $EXTRA_ARGS
+          elif [ -n "${{ inputs.date }}" ]; then
             python3 daily_report.py --fetch-odoo --date "${{ inputs.date }}" $YEAR_ARG $EXTRA_ARGS
           elif [ "${{ inputs.use_today }}" = "true" ]; then
             TODAY=$(TZ=Asia/Bangkok date +%Y-%m-%d)

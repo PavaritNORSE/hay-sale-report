@@ -1561,6 +1561,8 @@ def main():
     parser.add_argument('--excel-only', action='store_true',
                         help='Email the patched XLSM file directly (skip PDF). '
                              'Used for on-demand requests from Odoo.')
+    parser.add_argument('--last13', action='store_true',
+                        help='Fetch last 13 months of data (spans 2 years if needed).')
     args = parser.parse_args()
 
     # v3.7: parse --date into a tz-aware datetime
@@ -1600,8 +1602,29 @@ def main():
 
     # ── Fetch / Read data ────────────────────────────────────────────────────
     if args.fetch_odoo:
-        print(f"Fetching from Odoo API (year={args.year})...")
-        so_raw, pos_raw, cn_raw, sopay_raw, pospay_raw = fetch_odoo_all(args.year)
+        if args.last13:
+            today_bkk = datetime.now(TZ_BKK)
+            yr_end = today_bkk.year
+            yr_start = (today_bkk.replace(year=today_bkk.year - 1)).year
+            years = sorted(set([yr_start, yr_end]))
+            print(f"Fetching from Odoo API (last 13 months: {years})...")
+            def _merge(r1, r2):
+                return r1 + r2[1:] if len(r2) > 1 else r1
+            datasets = [fetch_odoo_all(y) for y in years]
+            so_raw   = datasets[0][0]
+            pos_raw  = datasets[0][1]
+            cn_raw   = datasets[0][2]
+            sopay_raw  = datasets[0][3]
+            pospay_raw = datasets[0][4]
+            for ds in datasets[1:]:
+                so_raw     = _merge(so_raw,     ds[0])
+                pos_raw    = _merge(pos_raw,    ds[1])
+                cn_raw     = _merge(cn_raw,     ds[2])
+                sopay_raw  = _merge(sopay_raw,  ds[3])
+                pospay_raw = _merge(pospay_raw, ds[4])
+        else:
+            print(f"Fetching from Odoo API (year={args.year})...")
+            so_raw, pos_raw, cn_raw, sopay_raw, pospay_raw = fetch_odoo_all(args.year)
         print(f"  Raw: SO={len(so_raw)-1} POS={len(pos_raw)-1} CN={len(cn_raw)-1} "
               f"SOPay={len(sopay_raw)-1} POSPay={len(pospay_raw)-1}  "
               f"({time.time()-t0:.1f}s)")
@@ -1734,7 +1757,8 @@ def main():
     # ── Excel-only mode (on-demand request from Odoo) ────────────────────────
     if args.excel_only:
         try:
-            send_excel_email(XLSM, report_date=report_date, year=args.year)
+            send_excel_email(XLSM, report_date=report_date,
+                             year=args.year if not args.last13 else 'Last 13 Months')
         except Exception as e:
             print(f'\n[EMAIL] ERROR: {e}')
             traceback.print_exc()
