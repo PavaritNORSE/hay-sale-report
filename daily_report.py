@@ -1612,7 +1612,6 @@ def main():
     # ── Fetch / Read data ────────────────────────────────────────────────────
     if args.fetch_odoo:
         if args.last13:
-            import calendar
             today_bkk = datetime.now(TZ_BKK)
             d_to = today_bkk.strftime('%Y-%m-%d')
             m13 = today_bkk.month - 13
@@ -1620,8 +1619,7 @@ def main():
             while m13 <= 0:
                 m13 += 12
                 y13 -= 1
-            max_day = calendar.monthrange(y13, m13)[1]
-            d_from = f'{y13}-{m13:02d}-{min(today_bkk.day, max_day):02d}'
+            d_from = f'{y13}-{m13:02d}-01'
             print(f"Fetching from Odoo API (last 13 months: {d_from} → {d_to})...")
             so_raw, pos_raw, cn_raw, sopay_raw, pospay_raw = fetch_odoo_all(date_from=d_from, date_to=d_to)
         else:
