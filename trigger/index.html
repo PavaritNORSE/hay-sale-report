@@ -208,8 +208,14 @@ document.getElementById('btn-run').addEventListener('click', async () => {
   try {
     const r = await fetch(WORKER, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const j = await r.json();
-    if (j.ok) banner(st,'success','ส่งคำขอแล้ว!',`ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที`);
-    else banner(st,'error','เกิดข้อผิดพลาด',j.detail ? `<br><code style="font-size:12px;word-break:break-all;">${j.detail}</code>` : 'ลองอีกครั้งหรือติดต่อ IT');
+    if (j.ok) {
+      const rem = j.remaining > 0 ? ` (เหลืออีก ${j.remaining} ครั้งวันนี้)` : ' (ครบโควต้าวันนี้แล้ว)';
+      banner(st,'success','ส่งคำขอแล้ว!',`ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที${rem}`);
+    } else if (j.error === 'cooldown' || j.error === 'daily_limit') {
+      banner(st,'warn','ไม่สามารถส่งได้',j.detail);
+    } else {
+      banner(st,'error','เกิดข้อผิดพลาด',j.detail || 'ลองอีกครั้งหรือติดต่อ IT');
+    }
   } catch { banner(st,'error','เชื่อมต่อไม่ได้','ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'); }
   finally {
     btn.disabled = false;
