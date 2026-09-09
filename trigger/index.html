@@ -129,11 +129,6 @@
       <h1>Sale Report Request</h1>
       <p class="subtitle">ไฟล์ Excel จะถูกส่งไปยังอีเมลที่ระบุภายใน ~2 นาที</p>
 
-      <div id="no-pat-warn" style="display:none;" class="banner warn">
-        <span role="img" aria-label="warn">⚠️</span>
-        <div><strong>ยังไม่ได้ตั้งค่า Token</strong>กด ⚙ Admin ด้านล่างเพื่อตั้งค่าก่อน</div>
-      </div>
-
       <div id="form-fields">
         <div class="field" style="margin-top:4px;">
           <label for="run-email">ส่งไฟล์ไปที่อีเมล</label>
@@ -161,20 +156,6 @@
         <div id="run-status"></div>
       </div>
 
-      <div class="admin-panel" id="admin-panel">
-        <div class="admin-label">⚙ Admin — ตั้งค่า GitHub Token</div>
-        <div class="admin-row">
-          <div class="field">
-            <input type="password" id="admin-pat" placeholder="github_pat_…">
-          </div>
-          <button class="btn-admin-save" id="btn-save">บันทึก</button>
-        </div>
-        <p class="hint">
-          Fine-grained PAT: <strong>Actions → Read and write</strong> บน repo <code>hay-sale-report</code><br>
-          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">สร้างที่ GitHub → Settings → Fine-grained tokens</a>
-        </p>
-        <div id="admin-status"></div>
-      </div>
     </div>
 
     <div class="card-footer">
@@ -182,32 +163,18 @@
         <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-1.5V4.5A3.5 3.5 0 0 0 8 1zm2.5 5H5.5V4.5a2.5 2.5 0 0 1 5 0V6z"/>
       </svg>
       <span class="footer-text">Norse Republics · Internal Tool</span>
-      <button class="btn-admin" id="btn-toggle" style="margin-left:auto;">⚙ Admin</button>
     </div>
   </div>
 
 </div>
 
 <script>
-const REPO = 'PavaritNORSE/hay-sale-report';
-const WF   = 'daily-report.yml';
-const API  = `https://api.github.com/repos/${REPO}/actions/workflows/${WF}/dispatches`;
-const LS_PAT   = 'nr_pat';
+const WORKER = 'https://sale-report-trigger.pavarit-ris.workers.dev';
 const LS_EMAIL = 'nr_email';
 
 function banner(el, type, title, body) {
   const ic = {success:'✅',error:'❌',warn:'⚠️'};
   el.innerHTML = `<div class="banner ${type}"><span role="img">${ic[type]}</span><div><strong>${title}</strong>${body||''}</div></div>`;
-}
-
-function refresh() {
-  const pat = localStorage.getItem(LS_PAT);
-  document.getElementById('no-pat-warn').style.display = pat ? 'none' : 'flex';
-  document.getElementById('btn-run').disabled = !pat;
-  document.getElementById('run-email').disabled = !pat;
-  document.querySelectorAll('input[name="dm"]').forEach(r => r.disabled = !pat);
-  const saved = localStorage.getItem(LS_EMAIL);
-  if (saved && !document.getElementById('run-email').value) document.getElementById('run-email').value = saved;
 }
 
 document.querySelectorAll('input[name="dm"]').forEach(r =>
@@ -216,31 +183,8 @@ document.querySelectorAll('input[name="dm"]').forEach(r =>
   )
 );
 
-document.getElementById('btn-toggle').addEventListener('click', () =>
-  document.getElementById('admin-panel').classList.toggle('open')
-);
-
-document.getElementById('btn-save').addEventListener('click', async () => {
-  const pat = document.getElementById('admin-pat').value.trim();
-  const st  = document.getElementById('admin-status');
-  const btn = document.getElementById('btn-save');
-  st.innerHTML = '';
-  if (!pat) { banner(st,'warn','กรุณากรอก Token',''); return; }
-  btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ…';
-  try {
-    const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WF}`,
-      {headers:{Authorization:'Bearer '+pat,Accept:'application/vnd.github+json'}});
-    if (r.status===401) { banner(st,'error','Token ไม่ถูกต้อง','ตรวจสอบและ Copy ใหม่'); return; }
-    if (r.status===404) { banner(st,'error','ไม่พบ Workflow','ตรวจสอบ scope ของ Token'); return; }
-    localStorage.setItem(LS_PAT, pat);
-    banner(st,'success','บันทึกแล้ว!','');
-    document.getElementById('admin-pat').value = '';
-    document.getElementById('admin-panel').classList.remove('open');
-    refresh();
-  } catch(e) {
-    banner(st,'error','เชื่อมต่อ GitHub ไม่ได้','ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต');
-  } finally { btn.disabled = false; btn.textContent = 'บันทึก'; }
-});
+const saved = localStorage.getItem(LS_EMAIL);
+if (saved) document.getElementById('run-email').value = saved;
 
 document.getElementById('btn-run').addEventListener('click', async () => {
   const email = document.getElementById('run-email').value.trim();
@@ -258,30 +202,20 @@ document.getElementById('btn-run').addEventListener('click', async () => {
   btn.innerHTML = '<div class="spinner"></div> กำลังส่งคำขอ…';
   st.innerHTML = '';
   localStorage.setItem(LS_EMAIL, email);
-  const payload = {ref:'main',inputs:{recipients:email,format:'excel'}};
-  if (useToday) payload.inputs.use_today='true';
-  if (dateInput) payload.inputs.date=dateInput;
+  const payload = { recipients: email, format: 'excel' };
+  if (useToday) payload.use_today = 'true';
+  if (dateInput) payload.date = dateInput;
   try {
-    const r = await fetch(API,{
-      method:'POST',
-      headers:{Authorization:'Bearer '+localStorage.getItem(LS_PAT),Accept:'application/vnd.github+json','Content-Type':'application/json'},
-      body:JSON.stringify(payload)
-    });
-    if (r.status===204) banner(st,'success','ส่งคำขอแล้ว!',`ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที`);
-    else if (r.status===401) banner(st,'error','Token หมดอายุ','กด ⚙ Admin เพื่ออัปเดต Token');
-    else {
-      let detail = '';
-      try { const j = await r.json(); detail = j.message || JSON.stringify(j); } catch {}
-      banner(st,'error',`HTTP ${r.status}`,detail ? `<br><code style="font-size:12px;word-break:break-all;">${detail}</code>` : 'ลองอีกครั้งหรือติดต่อ IT');
-    }
-  } catch { banner(st,'error','เชื่อมต่อ GitHub ไม่ได้','ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'); }
+    const r = await fetch(WORKER, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const j = await r.json();
+    if (j.ok) banner(st,'success','ส่งคำขอแล้ว!',`ไฟล์ Excel จะถูกส่งไปที่ <strong>${email}</strong> ภายใน ~2 นาที`);
+    else banner(st,'error','เกิดข้อผิดพลาด',j.detail ? `<br><code style="font-size:12px;word-break:break-all;">${j.detail}</code>` : 'ลองอีกครั้งหรือติดต่อ IT');
+  } catch { banner(st,'error','เชื่อมต่อไม่ได้','ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'); }
   finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg> Request Excel Report';
   }
 });
-
-refresh();
 </script>
 </body>
 </html>
