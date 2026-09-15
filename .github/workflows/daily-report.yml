@@ -116,6 +116,21 @@ jobs:
             sed -i "s|^EMAIL_CC=.*|EMAIL_CC=|" .env
           fi
 
+      - name: Request info
+        run: |
+          echo "=============================="
+          echo "Requested by : ${{ inputs.recipients || 'scheduler (no email)' }}"
+          echo "Triggered at : $(TZ=Asia/Bangkok date '+%Y-%m-%d %H:%M:%S') (Bangkok)"
+          if [ "${{ inputs.last13 }}" = "true" ]; then
+            echo "Data range   : Last 13 months"
+          elif [ -n "${{ inputs.year }}" ]; then
+            echo "Data range   : Year ${{ inputs.year }}"
+          else
+            echo "Data range   : Current year (default)"
+          fi
+          echo "Format       : ${{ inputs.format || 'pdf (default)' }}"
+          echo "=============================="
+
       - name: Run pipeline
         env:
           PYTHONUTF8: '1'
