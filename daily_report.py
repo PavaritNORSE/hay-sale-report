@@ -377,12 +377,21 @@ def col_letter(n):
     _COL_LETTER_CACHE[n] = out
     return out
 
+class _ExcelDate:
+    """Wrapper for Excel date serial numbers — written as numeric cell with date style."""
+    __slots__ = ('serial',)
+    def __init__(self, serial): self.serial = serial
+
+# cellXf index 7 in the xlsm template = numFmtId 166 = dd-mmm-yyyy
+_DATE_STYLE = 7
+
 def make_cell(ri, ci, val):
     # v3.3: f-strings (marginally faster than %-format on CPython 3.11+).
-    # Output byte-identical to v3.2.
     ref = f'{col_letter(ci)}{ri}'
     if val is None:
         return f'<c r="{ref}"/>'
+    if isinstance(val, _ExcelDate):
+        return f'<c r="{ref}" s="{_DATE_STYLE}" t="n"><v>{val.serial}</v></c>'
     if isinstance(val, bool):
         return f'<c r="{ref}" t="n"><v>{int(val)}</v></c>'
     if isinstance(val, (int, float)):
@@ -1083,16 +1092,16 @@ def to_iso_date(dv):
 # On parse failure: (None, None, dv, dv-if-numeric-else-0) — matches v2.0
 # _date_sort_key fallback semantics exactly.
 _EXCEL_EPOCH = datetime(1899, 12, 30)
+_EXCEL_EPOCH_ORD = _EXCEL_EPOCH.toordinal()
 def _parse_date_triple(dv):
     try:
         if isinstance(dv, str) and len(dv) >= 10 and dv[4:5] == '-':
             d = datetime.strptime(dv[:10], '%Y-%m-%d')
         else:
             d = _EXCEL_EPOCH + timedelta(days=float(dv))
-        return d.month, WDAYS[d.weekday()], d.strftime('%d-%b-%Y'), d.toordinal()
+        ordn = d.toordinal()
+        return d.month, WDAYS[d.weekday()], _ExcelDate(ordn - _EXCEL_EPOCH_ORD), ordn
     except:
-        # Replicate v2.0 sort-key fallback: numeric dv passes through as-is so
-        # numeric-valued failures still sort by their raw magnitude.
         return None, None, dv, (dv if isinstance(dv, (int, float)) else 0)
 
 def thb(val, rate):
