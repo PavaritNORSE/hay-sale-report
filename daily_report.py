@@ -2033,8 +2033,8 @@ def send_failure_email(error_msg, phase, trace_str=None, report_date=None):
 
 # ── Daily PDF generator (win32com) ───────────────────────────────────────────
 DAILY_BRANCHES = [
-    'Somkid', 'NORSE Store', 'Line Chat',
-    'Line My Shop', 'Lazada', 'HAY Store', 'Wholesale',
+    'Somkid', 'NORSE Store', 'Line',
+    'NORSE Outlet', 'Lazada', 'HAY Store', 'Wholesale',
 ]
 
 # v3.4: hoist the per-branch filename-sanitiser regex to module scope so it
@@ -2085,16 +2085,17 @@ def _generate_daily_pdfs_libreoffice(xlsm_path, report_date=None):
     r = subprocess.run(cmd)
     if r.returncode != 0:
         print(f"[PDF] LibreOffice generator exited with code {r.returncode}")
-    # Collect whatever was produced (partial output still gets emailed,
-    # with the missing branches noted — same as the Excel path).
+    # Scan the output directory for all branch PDFs so the email stays in sync
+    # with whatever branches pdf_libre.py generated. Branch names come from the
+    # xlsm template, so hardcoding filenames here would break on renames.
     generated = []
-    for branch in DAILY_BRANCHES:
-        branch_safe = _RE_BRANCH_UNSAFE.sub('-', branch).replace(' ', '_')
-        p = os.path.join(pdf_dir, f'{branch_safe}_{date_str}.pdf')
-        if os.path.exists(p):
-            generated.append((branch, p))
-    # Prepend summary PDF so it appears first in the email attachment list.
     summary_p = os.path.join(pdf_dir, f'Summary_{date_str}.pdf')
+    if os.path.exists(pdf_dir):
+        for fname in sorted(os.listdir(pdf_dir)):
+            if not fname.endswith('.pdf') or fname.startswith('Summary_'):
+                continue
+            branch_key = fname.replace(f'_{date_str}.pdf', '').replace('_', ' ')
+            generated.append((branch_key, os.path.join(pdf_dir, fname)))
     if os.path.exists(summary_p):
         generated.insert(0, ('Summary', summary_p))
     return generated
