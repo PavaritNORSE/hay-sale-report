@@ -541,6 +541,7 @@ def generate(xlsm_path, report_date, outdir):
         # from the template file itself (Excel didn't set them either).
         style = doc.StyleFamilies.getByName('PageStyles') \
                                  .getByName(sheet.PageStyle)
+        style.IsLandscape = True
         style.ScaleToPagesX = 1
         style.ScaleToPagesY = 0          # 0 = as many pages tall as needed
         style.LeftMargin = style.RightMargin = 500      # 1/100 mm = 0.5cm
