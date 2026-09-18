@@ -432,6 +432,8 @@ def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
         # ── page setup: landscape, fit to 1 page ─────────────────────────
         ps = sdoc.StyleFamilies.getByName('PageStyles').getByName(sheet.PageStyle)
         ps.IsLandscape = True
+        if ps.Height > ps.Width:      # swap portrait → landscape dimensions
+            ps.Width, ps.Height = ps.Height, ps.Width
         ps.ScaleToPagesX = 1
         ps.ScaleToPagesY = 1
         ps.LeftMargin = ps.RightMargin = ps.TopMargin = ps.BottomMargin = 800
