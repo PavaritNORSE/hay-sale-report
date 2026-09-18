@@ -212,13 +212,17 @@ def _read_cr_sums(doc, date_str):
     return sums
 
 def _discover_branches(sheet):
-    """Scan column B of Daily Template for static text cells (branch labels).
+    """Scan column B of Daily Template for branch label cells.
     Returns (branches, panel_rows) — no code change needed when a branch is
     added to the xlsm; just update the template."""
     branches, panel_rows = [], []
     for ri in range(80):                        # covers 16+ branch blocks
         cell = sheet.getCellByPosition(1, ri)   # col B (index 1)
-        if cell.getType() != 2:                 # 2 = TEXT (static string only)
+        ct = cell.getType()
+        if ct == 0 or ct == 1:                  # EMPTY or NUMERIC → skip
+            continue
+        formula = cell.getFormula()
+        if not formula or formula.startswith('='):  # empty or calc formula → skip
             continue
         name = cell.getString().strip()
         if name:
