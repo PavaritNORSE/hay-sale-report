@@ -38,9 +38,23 @@ import sys
 import tempfile
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 _LO_TIMEOUT_SECS = 1200  # 20 minutes — kill soffice if it hangs this long
+
+# Excel date-serial epoch — same as daily_report._EXCEL_EPOCH.
+_EXCEL_EPOCH_LO = datetime(1899, 12, 30)
+
+def _cell_to_date_str(v, fmt='%d-%b-%Y'):
+    """Normalise either a text date or an Excel serial-number float to the
+    display string used for row matching (DD-Mon-YYYY).
+    Handles both storage formats so callers are format-agnostic."""
+    if isinstance(v, str):
+        return v
+    try:
+        return (_EXCEL_EPOCH_LO + timedelta(days=float(v))).strftime(fmt)
+    except (TypeError, ValueError):
+        return ''
 
 def _alarm_handler(signum, frame):
     raise TimeoutError(f'[PDF-LO] LibreOffice did not finish within '
@@ -166,10 +180,12 @@ def _read_ytd_rows(doc, date_str):
     by_branch = {}
     sums = {}
     for row in data:
-        if row[0] != date_str:          # col C (offset 0 in slice)
+        if _cell_to_date_str(row[0]) != date_str:   # col C — text or serial
             continue
         branch = row[6 - 2]             # col G
-        out = tuple(row[c - 2] for c in _YTD_SRC_COLS)
+        out_list = [row[c - 2] for c in _YTD_SRC_COLS]
+        out_list[0] = date_str          # always write text date in detail rows
+        out = tuple(out_list)
         by_branch.setdefault(branch, []).append(out)
         s = sums.setdefault(branch, [0.0, 0.0])
         for i, col in ((0, 28), (1, 29)):           # AC, AD
@@ -193,7 +209,7 @@ def _read_cr_sums(doc, date_str):
     data = cr.getCellRangeByPosition(1, 4, 12, end_row).getDataArray()
     sums = {}
     for row in data:
-        if row[0] != date_str:          # col B
+        if _cell_to_date_str(row[0]) != date_str:   # col B — text or serial
             continue
         label = row[4 - 1]              # col E
         v = row[12 - 1]                 # col M
@@ -282,7 +298,7 @@ def _read_pay_method_sums(doc, date_str):
     data = cr.getCellRangeByPosition(1, 4, 12, end_row).getDataArray()
     result = {}
     for row in data:
-        if row[0] != date_str:          # col B = date
+        if _cell_to_date_str(row[0]) != date_str:   # col B — text or serial
             continue
         branch = row[3]                 # col E = branch
         method = row[7]                 # col I = PayMethod

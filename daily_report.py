@@ -378,7 +378,7 @@ def col_letter(n):
     return out
 
 class _ExcelDate:
-    """Wrapper for Excel date serial numbers — written as numeric cell with date style."""
+    """Wrapper — date serial written as numeric cell with dd-mmm-yyyy style."""
     __slots__ = ('serial',)
     def __init__(self, serial): self.serial = serial
 
