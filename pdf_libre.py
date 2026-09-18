@@ -211,23 +211,21 @@ def _read_cr_sums(doc, date_str):
             sums[label] = sums.get(label, 0.0) + v
     return sums
 
+# Row numbers (1-based) of branch label cells in Daily Template column B.
+# Each block is 5 rows: label + 3 value rows + 1 empty.
+# Add a new row number here when adding a branch panel to the xlsm template.
+_PANEL_LABEL_ROWS = [3, 8, 13, 18, 23, 28, 33]
+
 def _discover_branches(sheet):
-    """Scan column B of Daily Template for branch label cells.
-    Returns (branches, panel_rows) — no code change needed when a branch is
-    added to the xlsm; just update the template."""
+    """Read branch names from panel label rows in Daily Template column B.
+    Branch renames in the xlsm propagate automatically — only adding a NEW
+    branch requires appending its label row to _PANEL_LABEL_ROWS above."""
     branches, panel_rows = [], []
-    for ri in range(80):                        # covers 16+ branch blocks
-        cell = sheet.getCellByPosition(1, ri)   # col B (index 1)
-        ct = cell.getType()
-        if ct == 0 or ct == 1:                  # EMPTY or NUMERIC → skip
-            continue
-        formula = cell.getFormula()
-        if not formula or formula.startswith('='):  # empty or calc formula → skip
-            continue
-        name = cell.getString().strip()
+    for row in _PANEL_LABEL_ROWS:
+        name = sheet.getCellByPosition(1, row - 1).getString().strip()  # col B
         if name:
             branches.append(name)
-            panel_rows.append(ri + 1)           # 1-based row number
+            panel_rows.append(row)
     return branches, panel_rows
 
 def _write_panel(sheet, branch, ytd_sums, cr_sums, panel_rows):
