@@ -70,12 +70,6 @@ except ImportError:
         "  Windows: \"C:\\Program Files\\LibreOffice\\program\\python.exe\" pdf_libre.py ...\n")
     sys.exit(1)
 
-# Keep in sync with daily_report.DAILY_BRANCHES
-DAILY_BRANCHES = [
-    'Somkid', 'NORSE Store', 'Line Chat',
-    'Line My Shop', 'Lazada', 'HAY Store', 'Wholesale',
-]
-
 SHEET_NAME = 'Daily Template'
 
 # Same filename sanitiser as daily_report.py
@@ -217,16 +211,26 @@ def _read_cr_sums(doc, date_str):
             sums[label] = sums.get(label, 0.0) + v
     return sums
 
-# Branch-summary blocks in the left panel: label cell row -> value rows
-# label+1..label+3 hold Actual Sales Closed / Cash Received / Account
-# Receivable (template rows, 1-based): B3/C4-C6, B8/C9-C11, ... B33/C34-C36.
-_PANEL_LABEL_ROWS = [3, 8, 13, 18, 23, 28, 33]
+def _discover_branches(sheet):
+    """Scan column B of Daily Template for static text cells (branch labels).
+    Returns (branches, panel_rows) — no code change needed when a branch is
+    added to the xlsm; just update the template."""
+    branches, panel_rows = [], []
+    for ri in range(80):                        # covers 16+ branch blocks
+        cell = sheet.getCellByPosition(1, ri)   # col B (index 1)
+        if cell.getType() != 2:                 # 2 = TEXT (static string only)
+            continue
+        name = cell.getString().strip()
+        if name:
+            branches.append(name)
+            panel_rows.append(ri + 1)           # 1-based row number
+    return branches, panel_rows
 
-def _write_panel(sheet, branch, ytd_sums, cr_sums):
+def _write_panel(sheet, branch, ytd_sums, cr_sums, panel_rows):
     """Overwrite the C-column SUMIFS results: zero everywhere except the
     block whose label equals the current branch (same IF(OR(J2=label,...))
     guard the template formulas encode). Totals C39:C41 stay as formulas."""
-    for label_row in _PANEL_LABEL_ROWS:
+    for label_row in panel_rows:
         label = sheet.getCellByPosition(1, label_row - 1).getString()
         if label == branch:
             asc, ar = ytd_sums.get(branch, (0.0, 0.0))
@@ -311,7 +315,7 @@ def _read_pay_method_sums(doc, date_str):
 
 
 def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
-                           report_date, outdir):
+                           report_date, outdir, branches):
     """One-page landscape Summary PDF — two tables:
     Table 1 (top):    Branch × payment methods + Grand Total
     Table 2 (bottom): Branch × Orders / Sales Closed / Cash Received / AR
@@ -333,7 +337,7 @@ def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
         BLUE, WHITE = 0x2F5496, 0xFFFFFF
         GRAY        = 0xD9E1F2
         n_pm = len(_PAYMENT_METHODS)
-        n_br = len(DAILY_BRANCHES)
+        n_br = len(branches)
         PM_COLS  = n_pm + 2   # Branch + methods + Grand Total
         SUM_COLS = 5          # Branch + Orders + SC + CR + AR
 
@@ -367,7 +371,7 @@ def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
         total_orders = 0
         total_asc = total_cr = total_ar = 0.0
 
-        for i, branch in enumerate(DAILY_BRANCHES):
+        for i, branch in enumerate(branches):
             r = SUM_HDR + 1 + i
             orders = len(by_branch.get(branch, []))
             asc, ar = ytd_sums.get(branch, (0.0, 0.0))
@@ -401,7 +405,7 @@ def _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums, pay_sums,
         pm_col_totals = [0.0] * n_pm
         pm_grand = 0.0
 
-        for i, branch in enumerate(DAILY_BRANCHES):
+        for i, branch in enumerate(branches):
             r = PM_HDR + 1 + i
             _c(r, 0).setString(branch)
             b_pay = pay_sums.get(branch, {})
@@ -557,13 +561,18 @@ def generate(xlsm_path, report_date, outdir):
         title_rows.StartColumn, title_rows.EndColumn = 0, 21
         title_rows.StartRow, title_rows.EndRow = 4, 4    # row 5 (0-based 4)
 
+        branches, panel_rows = _discover_branches(sheet)
+        if not branches:
+            raise RuntimeError('No branch labels found in Daily Template column B')
+        print(f'[PDF-LO] branches discovered: {branches}')
+
         generated = 0
-        for branch in DAILY_BRANCHES:
+        for branch in branches:
             sheet.getCellByPosition(9, 1).setString(branch)   # J2
             if prev_rows > 1:
                 _clear_detail_area(sheet, prev_rows)
             prev_rows = _write_detail_rows(sheet, by_branch.get(branch, []))
-            _write_panel(sheet, branch, ytd_sums, cr_sums)
+            _write_panel(sheet, branch, ytd_sums, cr_sums, panel_rows)
             doc.calculateAll()
 
             # Auto-fit all columns A–V so no cell shows ### regardless of value.
@@ -593,13 +602,13 @@ def generate(xlsm_path, report_date, outdir):
             print(f'[PDF-LO]   OK {branch:<15} -> '
                   f'{os.path.basename(pdf_path)}  (rows 1:{last_row})')
 
-        print(f'[PDF-LO] generated {generated}/{len(DAILY_BRANCHES)} '
+        print(f'[PDF-LO] generated {generated}/{len(branches)} '
               f'files in: {outdir}')
-        if generated < len(DAILY_BRANCHES):
+        if generated < len(branches):
             exit_code = 1
 
         _generate_summary_pdf(desktop, by_branch, ytd_sums, cr_sums,
-                               pay_sums, report_date, outdir)
+                               pay_sums, report_date, outdir, branches)
         return exit_code
 
     except TimeoutError as e:
