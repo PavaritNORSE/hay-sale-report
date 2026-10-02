@@ -750,8 +750,20 @@ def cleanse_so(raw):
             cur[1] = prev[1]
         # Now compute keys_match using the post-fill SO name in col 1.
         keys_match = (cur[1] == prev[1])
+        # v3.9 FIX: Remap col 11 BEFORE fill-down so that fill-down propagates
+        # the remapped value, not the raw Odoo string. The old order (fill then
+        # remap) caused rows 2+ of a multi-line SO to receive _IN_STOCK from
+        # fill-down and then get remapped again to _PRE_ORDER, because the
+        # already-remapped value was neither 'Payment in Full now' nor empty.
+        v11 = cur[11]
+        if v11 == 'Payment in Full now':
+            cur[11] = _IN_STOCK
+        elif v11 is not None and str(v11) != '':
+            cur[11] = _PRE_ORDER
         if keys_match:
-            # c=3..12 (ci=2..11): key-matched fill-down (header fields)
+            # c=3..12 (ci=2..11): key-matched fill-down (header fields).
+            # col 11 (payment term) is now remapped above, so fill-down here
+            # only propagates the remapped value when cur[11] is still empty.
             for ci in range(2, 12):
                 v = cur[ci]
                 if v is None or v == '':
@@ -761,12 +773,6 @@ def cleanse_so(raw):
             v = cur[26]
             if v is None or v == '':
                 cur[26] = prev[26]
-        # Payment-term remap on col 11 (after fill-down) — same as v3.4.
-        v11 = cur[11]
-        if v11 == 'Payment in Full now':
-            cur[11] = _IN_STOCK
-        elif v11 is not None and str(v11) != '':
-            cur[11] = _PRE_ORDER
     # Remove zero-qty rows (carry monetary cols forward), and apply col-5
     # Thai/Non-Thai remap on kept rows (fused into the same pass).
     # After padding above every row in d has cur_len >= 27, so the cur_len
