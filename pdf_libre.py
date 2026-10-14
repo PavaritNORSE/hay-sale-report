@@ -157,12 +157,32 @@ _DETAIL_COL_FIRST = 8      # template col I (0-based)
 _DETAIL_COL_LAST = 21      # template col V (0-based)
 _CLEAR_FLAGS = 1 | 2 | 4 | 16   # VALUE | DATETIME | STRING | FORMULA
 
-def _read_ytd_rows(doc, date_str):
+
+def _norm_branch(src, branches):
+    """Map a source_id / sheet branch label to its nearest branch label.
+    Exact match wins; otherwise the longest label that is a prefix of src
+    (followed by a space) wins — so 'Line Chat' → 'Line' and
+    'Line My Shop' → 'Line' when 'Line' is in branches."""
+    if not src or not branches:
+        return src
+    if src in branches:
+        return src
+    for label in sorted(branches, key=len, reverse=True):
+        if src.startswith(label + ' '):
+            return label
+    return src
+
+
+def _read_ytd_rows(doc, date_str, branches=None):
     """Read the YTD sheet once. Returns (by_branch, sums) where by_branch
     maps branch -> [14-col detail row, ...] for rows whose date (col C,
     'DD-MMM-YYYY' string) equals date_str, and sums maps branch ->
     [sum YTD!AC, sum YTD!AD] (Actual Sales Closed / Account Receivable,
-    mirroring the branch-summary SUMIFS in column C of the template)."""
+    mirroring the branch-summary SUMIFS in column C of the template).
+
+    branches: list of canonical branch labels from _discover_branches.
+    When provided, source_id values like 'Line Chat' and 'Line My Shop'
+    are folded into their parent label 'Line' via prefix matching."""
     ytd = doc.Sheets.getByName('YTD')
     cur = ytd.createCursor()
     cur.gotoEndOfUsedArea(False)
@@ -176,7 +196,7 @@ def _read_ytd_rows(doc, date_str):
     for row in data:
         if _cell_to_date_str(row[0]) != date_str:   # col C — text or serial
             continue
-        branch = row[6 - 2]             # col G
+        branch = _norm_branch(row[6 - 2], branches)  # col G → canonical label
         out_list = [row[c - 2] for c in _YTD_SRC_COLS]
         out_list[0] = date_str          # always write text date in detail rows
         out = tuple(out_list)
@@ -188,11 +208,13 @@ def _read_ytd_rows(doc, date_str):
                 s[i] += v
     return by_branch, sums
 
-def _read_cr_sums(doc, date_str):
+def _read_cr_sums(doc, date_str, branches=None):
     """Sum 'Cash Received'!M per branch label (col E) for rows whose date
     (col B, 'DD-MMM-YYYY' string) equals date_str — the Cash Received
     SUMIFS of the branch summary. Excel coerces those text dates when
-    matching a date criterion; LibreOffice does not, so we compute it."""
+    matching a date criterion; LibreOffice does not, so we compute it.
+
+    branches: canonical branch labels for prefix normalization (see _norm_branch)."""
     cr = doc.Sheets.getByName('Cash Received')
     cur = cr.createCursor()
     cur.gotoEndOfUsedArea(False)
@@ -205,7 +227,7 @@ def _read_cr_sums(doc, date_str):
     for row in data:
         if _cell_to_date_str(row[0]) != date_str:   # col B — text or serial
             continue
-        label = row[4 - 1]              # col E
+        label = _norm_branch(row[4 - 1], branches)  # col E → canonical label
         v = row[12 - 1]                 # col M
         if isinstance(v, (int, float)):
             sums[label] = sums.get(label, 0.0) + v
@@ -293,8 +315,10 @@ _PAYMENT_METHODS = [
     'WeChat Pay (KBANK)',
 ]
 
-def _read_pay_method_sums(doc, date_str):
-    """Returns {branch: {method: amount}} from Cash Received sheet col I (PayMethod)."""
+def _read_pay_method_sums(doc, date_str, branches=None):
+    """Returns {branch: {method: amount}} from Cash Received sheet col I (PayMethod).
+
+    branches: canonical branch labels for prefix normalization (see _norm_branch)."""
     cr = doc.Sheets.getByName('Cash Received')
     cur = cr.createCursor()
     cur.gotoEndOfUsedArea(False)
@@ -306,7 +330,7 @@ def _read_pay_method_sums(doc, date_str):
     for row in data:
         if _cell_to_date_str(row[0]) != date_str:   # col B — text or serial
             continue
-        branch = row[3]                 # col E = branch
+        branch = _norm_branch(row[3], branches)     # col E → canonical label
         method = row[7]                 # col I = PayMethod
         amount = row[11]                # col M = amount
         if not isinstance(amount, (int, float)):
@@ -536,11 +560,19 @@ def generate(xlsm_path, report_date, outdir):
         if col_c.Width < 3000:
             col_c.Width = 3000
 
+        # Discover branches first so the branch labels can be used for
+        # source_id normalisation inside the read functions (e.g. mapping
+        # 'Line Chat' / 'Line My Shop' → 'Line').
+        branches, panel_rows = _discover_branches(sheet)
+        if not branches:
+            raise RuntimeError('No branch labels found in Daily Template column B')
+        print(f'[PDF-LO] branches discovered: {branches}')
+
         # Replace the dynamic-array detail table with injected values
         # (see the note above _YTD_SRC_COLS for why).
-        by_branch, ytd_sums = _read_ytd_rows(doc, date_str)
-        cr_sums = _read_cr_sums(doc, date_str)
-        pay_sums = _read_pay_method_sums(doc, date_str)
+        by_branch, ytd_sums = _read_ytd_rows(doc, date_str, branches)
+        cr_sums = _read_cr_sums(doc, date_str, branches)
+        pay_sums = _read_pay_method_sums(doc, date_str, branches)
         _clear_detail_area(sheet, 500)     # wipe formulas + any stale cache
         prev_rows = 1
 
@@ -562,11 +594,6 @@ def generate(xlsm_path, report_date, outdir):
         title_rows.Sheet = sheet_idx
         title_rows.StartColumn, title_rows.EndColumn = 0, 21
         title_rows.StartRow, title_rows.EndRow = 4, 4    # row 5 (0-based 4)
-
-        branches, panel_rows = _discover_branches(sheet)
-        if not branches:
-            raise RuntimeError('No branch labels found in Daily Template column B')
-        print(f'[PDF-LO] branches discovered: {branches}')
 
         generated = 0
         for branch in branches:
