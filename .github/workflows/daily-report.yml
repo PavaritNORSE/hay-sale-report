@@ -94,14 +94,35 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Cache the downloaded .debs and package lists so a slow Ubuntu mirror
+      # can't stall the run. Bump APT_CACHE_VER when the package list changes.
+      - name: Detect Ubuntu version
+        id: os
+        run: echo "ver=$(. /etc/os-release && echo "$VERSION_ID")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore apt cache
+        uses: actions/cache@v6
+        with:
+          path: ~/apt-cache
+          key: apt-ubuntu${{ steps.os.outputs.ver }}-v1
+
       - name: Install LibreOffice, Thai fonts, Python deps
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
-            libreoffice-calc python3-uno \
+          PKGS="libreoffice-calc python3-uno \
             fonts-tlwg-loma fonts-tlwg-garuda fonts-tlwg-kinnari \
             fonts-crosextra-carlito fonts-crosextra-caladea fonts-liberation \
-            python3-requests python3-dotenv
+            python3-requests python3-dotenv"
+          C="$HOME/apt-cache"
+          mkdir -p "$C/archives/partial" "$C/lists/partial"
+          APT="sudo apt-get -o Dir::Cache::Archives=$C/archives -o Dir::State::Lists=$C/lists -o APT::Keep-Downloaded-Packages=true"
+          # Cached lists + debs install offline; on a miss or stale cache, refresh from the mirror.
+          if ! $APT install -y -qq --no-install-recommends $PKGS; then
+            echo "apt cache miss/stale - updating from mirror"
+            $APT update -qq
+            $APT install -y -qq --no-install-recommends $PKGS
+          fi
+          sudo chown -R "$(id -u):$(id -g)" "$C"
+          du -sh "$C"
 
       # .env is gitignored — recreate it from the ENV_FILE repository secret
       # (Settings > Secrets and variables > Actions > New repository secret)
