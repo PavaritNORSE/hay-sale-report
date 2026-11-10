@@ -10,7 +10,7 @@ that have LibreOffice but no Excel.
 Mirrors the Excel COM behavior step-for-step:
   - open the patched xlsm, recalculate all formulas
   - G1/G2/G3 = day/month/year, J2 = branch name (per branch)
-  - last_row = last non-empty cell in column I (formulas count), min 41
+  - last_row = last non-empty cell in column I (formulas count), min 46
   - print area $A$1:$V$last_row, repeat row 5 as title on every page
   - fit to 1 page wide / unlimited tall, 0.5cm margins, no header/footer
   - export "Daily Template" sheet only (all other sheets hidden)
@@ -236,7 +236,7 @@ def _read_cr_sums(doc, date_str, branches=None):
 # Row numbers (1-based) of branch label cells in Daily Template column B.
 # Each block is 5 rows: label + 3 value rows + 1 empty.
 # Add a new row number here when adding a branch panel to the xlsm template.
-_PANEL_LABEL_ROWS = [3, 8, 13, 18, 23, 28, 33]
+_PANEL_LABEL_ROWS = [3, 8, 13, 18, 23, 28, 33, 38]
 
 def _discover_branches(sheet):
     """Read branch names from panel label rows in Daily Template column B.
@@ -253,7 +253,7 @@ def _discover_branches(sheet):
 def _write_panel(sheet, branch, ytd_sums, cr_sums, panel_rows):
     """Overwrite the C-column SUMIFS results: zero everywhere except the
     block whose label equals the current branch (same IF(OR(J2=label,...))
-    guard the template formulas encode). Totals C39:C41 stay as formulas."""
+    guard the template formulas encode). Totals C44:C46 stay as formulas."""
     for label_row in panel_rows:
         label = sheet.getCellByPosition(1, label_row - 1).getString()
         if label == branch:
@@ -608,7 +608,7 @@ def generate(xlsm_path, report_date, outdir):
             for _ci in range(22):
                 sheet.Columns.getByIndex(_ci).OptimalWidth = True
 
-            last_row = max(41, _last_used_row_col_I(sheet))
+            last_row = max(46, _last_used_row_col_I(sheet))
 
             area = uno.createUnoStruct('com.sun.star.table.CellRangeAddress')
             area.Sheet = sheet_idx

@@ -1425,7 +1425,8 @@ def fetch_odoo_all(year=ODOO_YEAR, date_from=None, date_to=None):
     ]
     # domain ตรงกับ Favorites filter id=206 + ใช้ UTC ที่คำนวณจาก TH timezone
     pos_domain = [
-        '|', ['config_id', 'ilike', 'norse'], ['config_id', 'ilike', 'hay'],
+        '|', '|', ['config_id', 'ilike', 'norse'], ['config_id', 'ilike', 'hay'],
+        ['config_id', 'ilike', 'dusit central park'],
         '|', ['state', '=', 'invoiced'], ['state', '=', 'done'],
         ['date_order', '>=', pos_start],   # <-- Thailand UTC+7 corrected
         ['date_order', '<=', pos_end],     # <-- Thailand UTC+7 corrected
@@ -2041,6 +2042,7 @@ def send_failure_email(error_msg, phase, trace_str=None, report_date=None):
 DAILY_BRANCHES = [
     'Somkid', 'NORSE Store', 'Line',
     'NORSE Outlet', 'Lazada', 'HAY Store', 'Wholesale',
+    'Dusit Central Park',
 ]
 
 # v3.4: hoist the per-branch filename-sanitiser regex to module scope so it
